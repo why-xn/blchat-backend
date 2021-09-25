@@ -11,7 +11,7 @@ var { User } = require('../db/model/models');
 router.get('/', auth, async (req, res, next) => {
   const { role } = req.user;
   
-  const queryRole = req.query.role;
+  const queryRole = req.query.role.toUpperCase();
   if (role !== 'ADMIN' && queryRole == 'ADMIN') {
     return res.sendStatus(403);
   }
@@ -25,6 +25,15 @@ router.get('/', auth, async (req, res, next) => {
   }
   
   res.status(200).json({data: users});
+});
+
+
+
+
+/* GET MySelf */
+router.get('/myself', auth, async (req, res, next) => {
+  var user = await User.findById(req.user.userId);
+  res.status(200).json({status: 'success', data: user});
 });
 
 

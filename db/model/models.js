@@ -53,8 +53,10 @@ const ChatMessageSchema = new Schema({
     _id: String,
     chatId: String,
     chatType: String, // P (PRIVATE), G (GROUP)
-    sender: String,
-    message: String,
+    senderId: String,
+    senderDisplayName: String,
+    msg: String,
+    status: String,
     createDate: Date
 });
 

@@ -23,18 +23,23 @@
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
+      var connected = false;
       var socket = io({
           auth: {
-            token: "noushin"
+            token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3ZWY2NGUxNS0zOGI3LTRhNTctOThiMy0yZWRiYWY1MThhMDciLCJ1c2VybmFtZSI6IndoeXhuIiwiaWF0IjoxNjMyNDc1Mzk5LCJleHAiOjE2MzI0ODI1OTl9.vpp-tL7A_wCeasup4VFJw3n6PbJWe2wKwTqXJfoGqsA"
           }
       });
 
       socket.on("connect_error", (err) => {
-        console.log(err.message); // prints the message associated with the error
+        console.log(err instanceof Error);
+        console.log(err.message);
+        console.log(err.data);
+        connected = false;
       });
 
       socket.on("connect", () => {
         console.log(socket.id); // x8WIv7-mJelg7on_ALbx
+        connected = true;
         socket.emit('join', 'premiumroom');
       });
 
@@ -45,24 +50,25 @@
       form.addEventListener('submit', function(e) {
         e.preventDefault();
         if (input.value) {
-          socket.emit('chat message', input.value);
+          socket.emit('msg-channel', {chatId: 'premiumroom', msg: input.value});
           input.value = '';
         }
       });
 
-      socket.on('chat message', function(msg) {
+      socket.on('msg-channel', function(incomingData) {
+        console.log('Incoming:', incomingData);
         var item = document.createElement('li');
-        item.textContent = msg;
+        item.textContent = incomingData.msg;
         messages.appendChild(item);
         window.scrollTo(0, document.body.scrollHeight);
       });
 
-      socket.on('premiumroom', function(msg) {
+      /*socket.on('premiumroom', function(msg) {
         var item = document.createElement('li');
         item.textContent = msg;
         messages.appendChild(item);
         window.scrollTo(0, document.body.scrollHeight);
-      });
+      });*/
     </script>
   </body>
 </html>

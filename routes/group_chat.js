@@ -7,9 +7,9 @@ const auth = require("../middleware/auth");
 var { GroupChat } = require('../db/model/models');
 
 /* GET GroupChat listing. */
-router.get('/', auth, async (req, res, next) => {
+router.get('/public', auth, async (req, res, next) => {
   var publicGroupChats = await GroupChat.find({mode: 'PUBLIC', status: 'V'});
-  return res.status(200).json({data: publicGroupChats});
+  return res.status(200).json({status: 'success', data: publicGroupChats});
 });
 
 
@@ -30,7 +30,8 @@ router.post('/public', auth, async function(req, res, next) {
     _id: uuidv4(),
     name: name,
     displayPicture: displayPicture,
-    mode: 'PUBLIC'
+    mode: 'PUBLIC',
+    status: 'V'
   });
   newGroup.save().then(() => {
     return res.status(200).json({status: 'success', message: 'Public Group Chat Created'});

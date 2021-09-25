@@ -9,7 +9,7 @@ var { ChatMessage, GroupChat, PrivateChat } = require('../db/model/models');
 /* GET Chat Messages */
 router.get('/:chatType/:chatId', auth, async (req, res, next) => {
   const { role } = req.user;
-  const chatType = req.params.chatType;
+  const chatType = req.params.chatType.toUpperCase();
   const chatId = req.params.chatId;
   if (role !== 'ADMIN') {
       if (chatType == 'GROUP') {
@@ -31,7 +31,7 @@ router.get('/:chatType/:chatId', auth, async (req, res, next) => {
       }
   }
 
-  var chatMessages = await ChatMessages.find({status: 'V'});
+  var chatMessages = await ChatMessage.find({chatId: chatId, status: 'V'}).sort({createDate: 'asc'}).limit(100);
   return res.status(200).json({status: 'success', data: chatMessages});
 });
 
