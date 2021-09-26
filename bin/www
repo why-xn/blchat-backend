@@ -8,10 +8,11 @@ var app = require('../app');
 var debug = require('debug')('blchat-backend:server');
 var http = require('http');
 var db = require('../db/adapter/mongo');
-var { GroupChat, ChatMessage } = require('../db/model/models');
+var { GroupChat, PrivateChat, ChatMessage } = require('../db/model/models');
 const jwt = require("jsonwebtoken");
 var cors = require('cors');
 require("dotenv").config();
+var cache = require("../cache/redis");
 const { 
   v4: uuidv4,
 } = require('uuid');
@@ -57,42 +58,77 @@ io.on('connection', (socket) => {
       socket.disconnect();
     }, 500);
   } else {
-    console.log('User: ' + socket.user.username + ' just connected. Socket ID: ' + socket.id);
-    // join new room
+    console.log('User: ' + socket.user.displayName + ' just connected. Socket ID: ' + socket.id);
+    
+    // join public group chat
     socket.on('join', async function (publicGroupChatId) {
       var publicGroupChat = await GroupChat.findOne({_id: publicGroupChatId, mode: 'PUBLIC', status: 'V'});
       if (publicGroupChat) {
         socket.join(publicGroupChatId);
-        //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.username + ' just joined the room!', 'server', 'Server');
-        io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.username + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
+        //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just joined the room!', 'server', 'Server');
+        io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.displayName + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
       } else {
         //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
         socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_FAILED', chatId: publicGroupChatId, msg: 'Group Chat not found'});
       }
     });
 
+    
+    // leave public group chat
     socket.on('leave', async function (publicGroupChatId) {
       var publicGroupChat = await GroupChat.findOne({_id: publicGroupChatId, mode: 'PUBLIC', status: 'V'});
       if (publicGroupChat) {
         socket.leave(publicGroupChatId);
-        //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.username + ' just left the room!', 'server', 'Server');
-        io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.username + ' just left the room!', senderId: 'server', senderDisplayName: 'Server'});
+        //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just left the room!', 'server', 'Server');
+        io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.displayName + ' just left the room!', senderId: 'server', senderDisplayName: 'Server'});
       } else {
         //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
         socket.emit("msg-channel", {code: 'LEAVE_GROUP_CHAT_FAILED', chatId: publicGroupChatId, msg: 'Group Chat not found'});
       }
     });
 
+
+    // on msg from client
     socket.on('msg-channel', async incomingData => {
       console.log(incomingData);
-      const chatMsg = await saveChatMessage(incomingData.chatId, incomingData.chatType, incomingData.msg, socket.user.userId, socket.user.username);
+
+      // checking permission
+      const chatInfo = await cache.hgetall(incomingData.chatId);
+      if (chatInfo && incomingData.chatType == 'GROUP' && chatInfo.chatType == 'GROUP') {
+        // do nothing
+      } else if (!chatInfo && incomingData.chatType == 'GROUP') {
+        var publicGroupChat = await GroupChat.findOne({_id: incomingData.chatId, mode: 'PUBLIC', status: 'V'});
+        if (!publicGroupChat) {
+          return;
+        }
+        cache.getClient().hset(incomingData.chatId, '_id', publicGroupChat._id, 'chatType', 'GROUP', 'groupMode', 'PUBLIC');
+        cache.getClient().expire(incomingData.chatId, 600);
+      } else if (chatInfo && chatInfo == 'PRIVATE' && incomingData.chatType == 'PRIVATE') {
+        if (!chatInfo.participantsInStr.includes(socket.user.userId)) {
+          return
+        }
+      } else if (!chatInfo && incomingData.chatType == 'PRIVATE') {
+        var privateChat = await PrivateChat.findOne({_id: incomingData.chatId, status: 'V'});
+        if (!privateChat || privateChat.state !== 'APPROVED') {
+          return;
+        }
+        if (!chatInfo.participantsInStr.includes(socket.user.userId)) {
+          return;
+        }
+        
+        cache.getClient().hset(privateChat, '_id', privateChat._id, 'chatType', 'PRIVATE', 'participantsInStr', privateChat.participantsInStr);
+        cache.getClient().expire(privateChat._id, 600);
+      }
+
+
+      const chatMsg = await saveChatMessage(incomingData.chatId, incomingData.chatType, incomingData.msg, socket.user.userId, socket.user.displayName);
       io.to(incomingData.chatId).emit("msg-channel", {
         code: 'NEW_CHAT_MSG',
         chatId: incomingData.chatId, 
         msgId: chatMsg._id,
         msg: incomingData.msg,
         senderId: socket.user.userId, 
-        senderDisplayName: socket.user.username
+        senderDisplayName: socket.user.displayName
       });
     });
   }
@@ -119,9 +155,10 @@ async function saveChatMessage (chatId, chatType, msg, senderId, senderDisplayNa
  * Listen on provided port, on all network interfaces.
  */
 
-server.listen(port, () => {
+server.listen(port, async () => {
   console.log(`Socket.IO server running at http://localhost:${port}/`);
   db.initConnection();
+  cache.initConnection();
 });
 server.on('error', onError);
 server.on('listening', onListening);
