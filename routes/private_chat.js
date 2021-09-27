@@ -20,11 +20,11 @@ router.get('/get/:otherParticipantId', auth, async function(req, res, next) {
   const existingPrivateChat = await PrivateChat.findOne({ $or:[ {'participantsInStr': participantsInStr_1}, {'participantsInStr': participantsInStr_2} ]});
   if (!existingPrivateChat) {
     if (req.user.role === 'EXHIBITOR' && otherParticipant === 'EXHIBITOR') {
-      return res.status(400).json({status: 'error', message: 'Exhibitor to Exhibitor Chat is not allowed'});
+      return res.status(400).json({status: 'error', msg: 'Exhibitor to Exhibitor Chat is not allowed'});
     } else if (req.user.role === 'VISITOR' && otherParticipant === 'VISITOR') {
-      return res.status(200).json({status: 'warning', message: 'You can request the user for private chat'});
+      return res.status(200).json({status: 'warning', msg: 'You can request the user for private chat'});
     } else if (req.user.role === 'EXHIBITOR' && otherParticipant === 'VISITOR') {
-      return res.status(400).json({status: 'error', message: 'Exhibitor cannot initiate chat with a Visitor'});
+      return res.status(400).json({status: 'error', msg: 'Exhibitor cannot initiate chat with a Visitor'});
     }
 
     const newPrivateChat = new PrivateChat({
@@ -43,7 +43,7 @@ router.get('/get/:otherParticipantId', auth, async function(req, res, next) {
     }).
     catch(error => {
       console.log(error);
-      return res.status(500).json({status: 'error', message: 'Error occurred while creating Private Chat'});
+      return res.status(500).json({status: 'error', msg: 'Error occurred while creating Private Chat'});
     });
   } else {
     return res.status(200).json({status: 'success', data: newPrivateChat});

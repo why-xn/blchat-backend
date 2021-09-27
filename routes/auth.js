@@ -31,7 +31,7 @@ router.post("/register", async (req, res) => {
     const oldUser = await User.findOne({ username });
 
     if (oldUser) {
-      return res.status(409).json({status: 'warning', message: 'User already exists. Please login.'})
+      return res.status(409).json({status: 'warning', msg: 'User already exists. Please login.'})
     }
 
     //Encrypt user password
@@ -96,7 +96,7 @@ router.post("/login", async (req, res) => {
       // user
       res.status(200).json(user);
     } else {
-      res.status(400).json({status: 'error', message: 'Invalid Credentials'});
+      res.status(400).json({status: 'error', msg: 'Invalid Credentials'});
     }
   } catch (err) {
     console.log(err);
