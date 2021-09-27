@@ -5,6 +5,7 @@ const {
 } = require('uuid');
 const auth = require("../middleware/auth");
 var { PrivateChat } = require('../db/model/models');
+var sio = require('../socket.io/socket');
 
 
 /* Request for Private Chat */
@@ -110,8 +111,14 @@ router.post('/request/approve/:chatId', auth, async function(req, res, next) {
   } else {
     existingPrivateChat.state = 'APPROVED';
     existingPrivateChat.save().then(() => {
-      //TODO: Send Notification to the receipient
-      www.getSocketIO().to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.displayName + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
+      var otherParticipantId = existingPrivateChat.participants[0];
+      if (otherParticipantId == requesterId) {
+        otherParticipantId = existingPrivateChat.participants[1];
+      }
+      
+      //broadcasting to recipient for the notification
+      sio.getSocketIO().to(otherParticipantId).emit("msg-channel", {code: 'PRIVATE_CHAT_APPROVED', chatId: existingPrivateChat._id, msg: req.user.displayName + ' has accepted your request for private chat', senderId: 'server', senderDisplayName: 'Server'});
+      
       return res.status(200).json({status: 'success', msg: 'Request approved'});
     }).
     catch(error => {
