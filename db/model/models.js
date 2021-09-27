@@ -49,6 +49,12 @@ const PrivateChatSchema = new Schema({
     createdBy: String
 });
 
+PrivateChatSchema.methods.toJSON = function() {
+    var obj = this.toObject()
+    delete obj.participantsInStr
+    return obj
+}
+
 const ChatMessageSchema = new Schema({
     _id: String,
     chatId: String,

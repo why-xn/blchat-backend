@@ -6,6 +6,7 @@ const {
 const auth = require("../middleware/auth");
 var { ChatMessage, GroupChat, PrivateChat } = require('../db/model/models');
 
+
 /* GET Chat Messages */
 router.get('/:chatType/:chatId', auth, async (req, res, next) => {
   const { role } = req.user;

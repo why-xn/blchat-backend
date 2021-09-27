@@ -37,6 +37,7 @@ var io = require('socket.io')(server, {
     methods: ["*"]
   }
 });
+
 const config = process.env;
 
 io.use((socket, next) => {
@@ -59,6 +60,8 @@ io.on('connection', (socket) => {
     }, 500);
   } else {
     console.log('User: ' + socket.user.displayName + ' just connected. Socket ID: ' + socket.id);
+
+    socket.join(socket.user.userId);
     
     // join public group chat
     socket.on('join', async function (publicGroupChatId) {
