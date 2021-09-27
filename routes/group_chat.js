@@ -23,7 +23,7 @@ router.post('/public', auth, async function(req, res, next) {
 
   const existingGroupChat = await GroupChat.findOne({ name: name });
   if (existingGroupChat) {
-    return res.status(409).json({status: 'warning', message: 'A Public Group Chat already exists with the same name.'})
+    return res.status(409).json({status: 'warning', msg: 'A Public Group Chat already exists with the same name.'})
   }
 
   const newGroup = new GroupChat({
@@ -34,11 +34,11 @@ router.post('/public', auth, async function(req, res, next) {
     status: 'V'
   });
   newGroup.save().then(() => {
-    return res.status(200).json({status: 'success', message: 'Public Group Chat Created'});
+    return res.status(200).json({status: 'success', msg: 'Public Group Chat Created'});
   }).
   catch(error => {
     console.log(error);
-    return res.status(500).json({status: 'error', message: 'Error occurred while creating Public Group Chat'});
+    return res.status(500).json({status: 'error', msg: 'Error occurred while creating Public Group Chat'});
   });
   
 });
