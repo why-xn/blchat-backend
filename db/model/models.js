@@ -30,7 +30,7 @@ const GroupChatSchema = new Schema({
 });
 
 const LastMessageSchema = new Schema({ 
-    message: String,
+    msg: String,
     sender: String,
     date: Date,
     seenByRecipient: Boolean

@@ -9,6 +9,7 @@ var indexRouter = require('./routes/index');
 var authRouter = require('./routes/auth');
 var usersRouter = require('./routes/users');
 var groupChatRouter = require('./routes/group_chat')
+var privateChatRouter = require('./routes/private_chat')
 var chatRouter = require('./routes/chat');
 var chatMessageRouter = require('./routes/chat_message');
 
@@ -31,7 +32,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', indexRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/users', usersRouter);
-app.use('/api/v1/group-chats', groupChatRouter)
+app.use('/api/v1/chats/group', groupChatRouter)
+app.use('/api/v1/chats/private', privateChatRouter)
 app.use('/chat', chatRouter);
 app.use('/api/v1/chat/messages', chatMessageRouter);
 

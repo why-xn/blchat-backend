@@ -4,13 +4,32 @@ const {
   v4: uuidv4,
 } = require('uuid');
 const auth = require("../middleware/auth");
-var { PrivateChat } = require('../db/model/models');
+var { PrivateChat, User } = require('../db/model/models');
 var sio = require('../socket.io/socket');
 
 
+router.get('/', auth, async function(req, res, next) {
+  const requesterId = req.user.userId;
+  const privateChatList = await PrivateChat.find({ participants: requesterId }).sort({"lastMessage.date": "desc"});
+  return res.status(200).json({status: 'success', data: privateChatList});
+});
+
+
+router.get('/:chatId', auth, async function(req, res, next) {
+  const requesterId = req.user.userId;
+  const chatId = req.params.chatId;
+  const existingPrivateChat = await PrivateChat.findOne({ _id: chatId });
+  if (!existingPrivateChat.participantsInStr.includes(requesterId)) {
+    return res.status(400).json({status: 'error', msg: 'Permission Denied'});
+  }
+  return res.status(200).json({status: 'success', data: existingPrivateChat});
+
+});
+
+
 /* Request for Private Chat */
-router.get('/get/:otherParticipantId', auth, async function(req, res, next) {
-  const requesterId = req.user._id;
+router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
+  const requesterId = req.user.userId;
   const otherParticipantId = req.params.otherParticipantId;
 
   var otherParticipant = await User.findById(otherParticipantId);
@@ -20,11 +39,11 @@ router.get('/get/:otherParticipantId', auth, async function(req, res, next) {
 
   const existingPrivateChat = await PrivateChat.findOne({ $or:[ {'participantsInStr': participantsInStr_1}, {'participantsInStr': participantsInStr_2} ]});
   if (!existingPrivateChat) {
-    if (req.user.role === 'EXHIBITOR' && otherParticipant === 'EXHIBITOR') {
+    if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'EXHIBITOR') {
       return res.status(400).json({status: 'error', msg: 'Exhibitor to Exhibitor Chat is not allowed'});
-    } else if (req.user.role === 'VISITOR' && otherParticipant === 'VISITOR') {
-      return res.status(200).json({status: 'warning', msg: 'You can request the user for private chat'});
-    } else if (req.user.role === 'EXHIBITOR' && otherParticipant === 'VISITOR') {
+    } else if (req.user.role === 'VISITOR' && otherParticipant.role === 'VISITOR') {
+      return res.status(200).json({status: 'warning', msg: 'You can request the user for private chat', data: {state: 'NONE', canRequest: true}});
+    } else if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'VISITOR') {
       return res.status(400).json({status: 'error', msg: 'Exhibitor cannot initiate chat with a Visitor'});
     }
 
@@ -47,13 +66,13 @@ router.get('/get/:otherParticipantId', auth, async function(req, res, next) {
       return res.status(500).json({status: 'error', msg: 'Error occurred while creating Private Chat'});
     });
   } else {
-    return res.status(200).json({status: 'success', data: newPrivateChat});
+    return res.status(200).json({status: 'success', data: existingPrivateChat});
   }
 });
 
 
 router.post('/request/:otherParticipantId', auth, async function(req, res, next) {
-  const requesterId = req.user._id;
+  const requesterId = req.user.userId;
   const otherParticipantId = req.params.otherParticipantId;
 
   var otherParticipant = await User.findById(otherParticipantId);

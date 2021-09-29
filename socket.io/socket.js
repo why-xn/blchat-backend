@@ -10,7 +10,7 @@ var io;
 
 const config = process.env;
 
-async function saveChatMessage (chatId, chatType, msg, senderId, senderDisplayName) {
+async function saveChatMessage (chatId, chatType, msg, senderId, senderDisplayName, createDate) {
     const newMessage = new ChatMessage({
       _id: uuidv4(),
       chatId: chatId,
@@ -19,11 +19,23 @@ async function saveChatMessage (chatId, chatType, msg, senderId, senderDisplayNa
       senderId: senderId,
       senderDisplayName: senderDisplayName,
       status: 'V',
-      createDate: new Date()
+      createDate: createDate
     });
+
+    if(chatType == 'P') {
+      const existingPrivateChat = await PrivateChat.findOne({ _id: chatId });
+      existingPrivateChat.lastMessage = {
+        msg: msg,
+        sender: senderId,
+        date: createDate,
+        seenByRecipient: false
+      }
+      existingPrivateChat.save();
+    } 
+
     await newMessage.save();
     return newMessage;
-  }
+}
 
 module.exports = {
     init: async (httpServer) => {
@@ -55,6 +67,7 @@ module.exports = {
             } else {
               console.log('User: ' + socket.user.displayName + ' just connected. Socket ID: ' + socket.id);
           
+              // join self channel
               socket.join(socket.user.userId);
 
               socket.on("disconnect", (reason) => {
@@ -65,16 +78,26 @@ module.exports = {
               });
               
               // join public group chat
-              socket.on('join', async function (publicGroupChatId) {
-                var publicGroupChat = await GroupChat.findOne({_id: publicGroupChatId, mode: 'PUBLIC', status: 'V'});
-                if (publicGroupChat) {
-                  socket.join(publicGroupChatId);
-                  //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just joined the room!', 'server', 'Server');
-                  io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.displayName + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
+              socket.on('join', async function (input) {
+                if (input.chatType === 'G') {
+                  var publicGroupChat = await GroupChat.findOne({_id: input.chatId, mode: 'PUBLIC', status: 'V'});
+                  if (publicGroupChat) {
+                    socket.join(input.chatId);
+                    //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just joined the room!', 'server', 'Server');
+                    io.to(input.chatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: input.chatId, msg: socket.user.displayName + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
+                  } else {
+                    //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
+                    socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_FAILED', chatId: input.chatId, msg: 'Group Chat not found'});
+                  }
                 } else {
-                  //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
-                  socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_FAILED', chatId: publicGroupChatId, msg: 'Group Chat not found'});
+                  var privateChat = await PrivateChat.findOne({_id: input.chatId, participants: socket.user.userId, status: 'V'});
+                  if (privateChat) {
+                    socket.join(input.chatId);
+                  } else {
+                    socket.emit("msg-channel", {code: 'JOIN_PRIVATE_CHAT_FAILED', chatId: input.chatId, msg: 'Private Chat not found'});
+                  }
                 }
+                
               });
           
               
@@ -98,41 +121,42 @@ module.exports = {
           
                 // checking permission
                 const chatInfo = await cache.hgetall(incomingData.chatId);
-                if (chatInfo && incomingData.chatType == 'GROUP' && chatInfo.chatType == 'GROUP') {
+                if (chatInfo && incomingData.chatType == 'G' && chatInfo.chatType == 'G') {
                   // do nothing
-                } else if (!chatInfo && incomingData.chatType == 'GROUP') {
+                } else if (!chatInfo && incomingData.chatType == 'G') {
                   var publicGroupChat = await GroupChat.findOne({_id: incomingData.chatId, mode: 'PUBLIC', status: 'V'});
                   if (!publicGroupChat) {
                     return;
                   }
-                  cache.getClient().hset(incomingData.chatId, '_id', publicGroupChat._id, 'chatType', 'GROUP', 'groupMode', 'PUBLIC');
+                  cache.getClient().hset(incomingData.chatId, '_id', publicGroupChat._id, 'chatType', 'G', 'groupMode', 'PUBLIC');
                   cache.getClient().expire(incomingData.chatId, 600);
-                } else if (chatInfo && chatInfo == 'PRIVATE' && incomingData.chatType == 'PRIVATE') {
+                } else if (chatInfo && chatInfo.chatType == 'P' && incomingData.chatType == 'P') {
                   if (!chatInfo.participantsInStr.includes(socket.user.userId)) {
                     return
                   }
-                } else if (!chatInfo && incomingData.chatType == 'PRIVATE') {
+                } else if (!chatInfo && incomingData.chatType == 'P') {
                   var privateChat = await PrivateChat.findOne({_id: incomingData.chatId, status: 'V'});
                   if (!privateChat || privateChat.state !== 'APPROVED') {
                     return;
                   }
-                  if (!chatInfo.participantsInStr.includes(socket.user.userId)) {
+                  if (!privateChat.participantsInStr.includes(socket.user.userId)) {
                     return;
                   }
                   
-                  cache.getClient().hset(privateChat, '_id', privateChat._id, 'chatType', 'PRIVATE', 'participantsInStr', privateChat.participantsInStr);
+                  cache.getClient().hset(privateChat._id, '_id', privateChat._id, 'chatType', 'P', 'participantsInStr', privateChat.participantsInStr);
                   cache.getClient().expire(privateChat._id, 600);
                 }
           
-          
-                const chatMsg = await saveChatMessage(incomingData.chatId, incomingData.chatType, incomingData.msg, socket.user.userId, socket.user.displayName);
+                const dateTime = new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
+                const chatMsg = await saveChatMessage(incomingData.chatId, incomingData.chatType, incomingData.msg, socket.user.userId, socket.user.displayName, dateTime);
                 io.to(incomingData.chatId).emit("msg-channel", {
                   code: 'NEW_CHAT_MSG',
                   chatId: incomingData.chatId, 
                   msgId: chatMsg._id,
                   msg: incomingData.msg,
                   senderId: socket.user.userId, 
-                  senderDisplayName: socket.user.displayName
+                  senderDisplayName: socket.user.displayName,
+                  sentAt: dateTime
                 });
               });
             }

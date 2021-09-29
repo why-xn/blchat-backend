@@ -26,7 +26,7 @@ router.get('/:chatType/:chatId', auth, async (req, res, next) => {
         if (privateChat == null || privateChat == undefined) {
           return res.status(400).json({status: 'error', msg: 'Not Found'});
         }
-        if (privateChat.participants[0] != req.user._id && privateChat.participants[1] != req.user._id) {
+        if (privateChat.participants[0] != req.user.userId && privateChat.participants[1] != req.user.userId) {
           return res.status(400).json({status: 'error', msg: 'Permission Denied'});
         }
       }

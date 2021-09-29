@@ -24,7 +24,7 @@ router.get('/', auth, async (req, res, next) => {
     var users = await User.find();
   }
   
-  res.status(200).json({data: users});
+  res.status(200).json({status: 'success', data: users});
 });
 
 
