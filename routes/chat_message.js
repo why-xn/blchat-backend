@@ -14,7 +14,7 @@ router.get('/:chatType/:chatId', auth, async (req, res, next) => {
   const chatId = req.params.chatId;
   if (role !== 'ADMIN') {
       if (chatType == 'GROUP') {
-        const groupChat = await GroupChat.findOne({ _id: chatId });
+        const groupChat = await GroupChat.findOne({ id: chatId });
         if (groupChat == null || groupChat == undefined) {
           return res.status(400).json({status: 'error', msg: 'Not Found'});
         }
@@ -22,11 +22,11 @@ router.get('/:chatType/:chatId', auth, async (req, res, next) => {
           return res.status(400).json({status: 'warning', msg: 'Private Group Chat is disabled for now'});
         }
       } else {
-        const privateChat = await PrivateChat.findOne({_id: chatId});
+        const privateChat = await PrivateChat.findOne({id: chatId});
         if (privateChat == null || privateChat == undefined) {
           return res.status(400).json({status: 'error', msg: 'Not Found'});
         }
-        if (privateChat.participants[0].id != req.user.userId && privateChat.participants[1].id != req.user.userId) {
+        if (privateChat.participants[0].id != req.user.id && privateChat.participants[1].id != req.user.id) {
           return res.status(400).json({status: 'error', msg: 'Permission Denied'});
         }
       }

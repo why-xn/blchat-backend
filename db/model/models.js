@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const UserSchema = new Schema({
-    _id: String,
+    id: String,
     displayName:  String,
     displayPicture: String,
     username: { type: String, unique: true },
@@ -21,7 +21,7 @@ UserSchema.methods.toJSON = function() {
 }
 
 const GroupChatSchema = new Schema({
-    _id: String,
+    id: String,
     name: String,
     displayPicture: String,
     mode: String, // PUBLIC, PRIVATE
@@ -43,7 +43,7 @@ const ParticipantSchema = new Schema({
 });
 
 const PrivateChatSchema = new Schema({
-    _id: String,
+    id: String,
     participants: [ParticipantSchema],
     participantsInStr: String,
     type: String, // V2V (VISITOR TO VISITOR), V2E (VISITOR TO EXHIBITOR)
@@ -62,7 +62,7 @@ PrivateChatSchema.methods.toJSON = function() {
 }
 
 const ChatMessageSchema = new Schema({
-    _id: String,
+    id: String,
     chatId: String,
     chatType: String, // P (PRIVATE), G (GROUP)
     senderId: String,

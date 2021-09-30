@@ -39,7 +39,7 @@ router.post("/register", async (req, res) => {
 
     // Create user in our database
     const user = await User.create({
-      _id: uuidv4(),
+      id: uuidv4(),
       displayName: displayName,
       username: username,
       password: encryptedPassword,
@@ -48,7 +48,7 @@ router.post("/register", async (req, res) => {
 
     // Create token
     const token = jwt.sign(
-      { userId: user._id, role, username, displayName },
+      { id: user.id, role, username, displayName },
       process.env.TOKEN_KEY,
       {
         expiresIn: "2h",
@@ -83,7 +83,7 @@ router.post("/login", async (req, res) => {
     if (user && (await bcrypt.compare(password, user.password))) {
       // Create token
       const token = jwt.sign(
-        { userId: user._id, role: user.role, displayName: user.displayName, username },
+        { id: user.id, role: user.role, displayName: user.displayName, username },
         process.env.TOKEN_KEY,
         {
           expiresIn: "2h",

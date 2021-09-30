@@ -17,11 +17,11 @@ router.get('/', auth, async (req, res, next) => {
   }
 
   if (queryRole !== undefined && queryRole !== null && queryRole.length > 0) {
-    var users = await User.find({role: queryRole, _id: { $ne: req.user.userId }});
+    var users = await User.find({role: queryRole,   id: { $ne: req.user.id }});
   } else if (role !== 'ADMIN') {
-    var users = await User.find({ role: { $ne: 'ADMIN' }, _id: { $ne: req.user.userId } });
+    var users = await User.find({ role: { $ne: 'ADMIN' }, id: { $ne: req.user.id } });
   } else {
-    var users = await User.find({ _id: { $ne: req.user.userId }});
+    var users = await User.find({ id: { $ne: req.user.id }});
   }
   
   res.status(200).json({status: 'success', data: users});
@@ -32,7 +32,7 @@ router.get('/', auth, async (req, res, next) => {
 
 /* GET MySelf */
 router.get('/myself', auth, async (req, res, next) => {
-  var user = await User.findById(req.user.userId);
+  var user = await User.findOne({id: req.user.id});
   res.status(200).json({status: 'success', data: user});
 });
 
@@ -46,7 +46,7 @@ router.get("/welcome", auth, (req, res) => {
 
 router.get('/test', function(req, res, next) {
   const shihab = new User({
-    _id: uuidv4(),
+    id: uuidv4(),
     displayName: 'Shihab Hasan',
     username: 'whyxn',
     password: 'hello123',

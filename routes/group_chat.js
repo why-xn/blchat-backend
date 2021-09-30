@@ -27,7 +27,7 @@ router.post('/public', auth, async function(req, res, next) {
   }
 
   const newGroup = new GroupChat({
-    _id: uuidv4(),
+    id: 'gc-' + uuidv4(),
     name: name,
     displayPicture: displayPicture,
     mode: 'PUBLIC',
