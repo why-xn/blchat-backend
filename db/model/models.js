@@ -15,10 +15,14 @@ const UserSchema = new Schema({
 });
 
 UserSchema.methods.toJSON = function() {
-    var obj = this.toObject()
-    delete obj.password
-    return obj
+    var obj = this.toObject();
+    delete obj._id;
+    delete obj.password;
+    return obj;
 }
+
+
+
 
 const GroupChatSchema = new Schema({
     id: String,
@@ -29,6 +33,16 @@ const GroupChatSchema = new Schema({
     createDate: Date
 });
 
+GroupChatSchema.methods.toJSON = function() {
+    var obj = this.toObject();
+    delete obj._id;
+    return obj;
+}
+
+
+
+
+
 const LastMessageSchema = new Schema({ 
     msg: String,
     sender: String,
@@ -36,11 +50,23 @@ const LastMessageSchema = new Schema({
     seenByRecipient: Boolean
 });
 
+LastMessageSchema.methods.toJSON = function() {
+    var obj = this.toObject();
+    delete obj._id;
+    return obj;
+}
+
 const ParticipantSchema = new Schema({
     id: String,
     displayName: String,
     role: String
 });
+
+ParticipantSchema.methods.toJSON = function() {
+    var obj = this.toObject();
+    delete obj._id;
+    return obj;
+}
 
 const PrivateChatSchema = new Schema({
     id: String,
@@ -57,9 +83,14 @@ const PrivateChatSchema = new Schema({
 
 PrivateChatSchema.methods.toJSON = function() {
     var obj = this.toObject()
+    delete obj._id;
     delete obj.participantsInStr
     return obj
 }
+
+
+
+
 
 const ChatMessageSchema = new Schema({
     id: String,
@@ -71,6 +102,15 @@ const ChatMessageSchema = new Schema({
     status: String,
     createDate: Date
 });
+
+ChatMessageSchema.methods.toJSON = function() {
+    var obj = this.toObject();
+    delete obj._id;
+    return obj;
+}
+
+
+
 
 module.exports = {
     User: mongoose.model('User', UserSchema),
