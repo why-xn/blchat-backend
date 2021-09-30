@@ -9,7 +9,7 @@ var asyncRedisClient;
 
 module.exports = {
     initConnection: async function () {
-        client = await redis.createClient(6379, "127.0.0.1", {db: 0});
+        client = await redis.createClient(process.env.REDIS_PORT, process.env.REDIS_HOST, {db: 0});
         client.on('connect', async () => {
             console.log('Redis client connected');
             asyncRedisClient = asyncRedis.decorate(client);
