@@ -90,7 +90,7 @@ module.exports = {
                     socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_FAILED', chatId: input.chatId, msg: 'Group Chat not found'});
                   }
                 } else {
-                  var privateChat = await PrivateChat.findOne({_id: input.chatId, participants: socket.user.userId, status: 'V'});
+                  var privateChat = await PrivateChat.findOne({_id: input.chatId, "participants.id": socket.user.userId, status: 'V'});
                   if (privateChat) {
                     socket.join(input.chatId);
                   } else {
@@ -130,20 +130,21 @@ module.exports = {
                   }
                   cache.getClient().hset(incomingData.chatId, '_id', publicGroupChat._id, 'chatType', 'G', 'groupMode', 'PUBLIC');
                   cache.getClient().expire(incomingData.chatId, 600);
-                } else if (chatInfo && chatInfo.chatType == 'P' && incomingData.chatType == 'P') {
+                } else if (chatInfo && chatInfo.chatType != 'G' && incomingData.chatType != 'G') {
                   if (!chatInfo.participantsInStr.includes(socket.user.userId)) {
                     return
                   }
-                } else if (!chatInfo && incomingData.chatType == 'P') {
+                } else if (!chatInfo && incomingData.chatType != 'G') {
                   var privateChat = await PrivateChat.findOne({_id: incomingData.chatId, status: 'V'});
                   if (!privateChat || privateChat.state !== 'APPROVED') {
+                    io.to(socket.user.userId).emit("msg-channel", {code: 'PERMISSION_DENIED', chatId: privateChat._id, msg: 'You reqeust for private chat has not been accepted yet', senderId: 'server', senderDisplayName: 'Server'});
                     return;
                   }
                   if (!privateChat.participantsInStr.includes(socket.user.userId)) {
                     return;
                   }
                   
-                  cache.getClient().hset(privateChat._id, '_id', privateChat._id, 'chatType', 'P', 'participantsInStr', privateChat.participantsInStr);
+                  cache.getClient().hset(privateChat._id, '_id', privateChat._id, 'chatType', incomingData.chatType, 'participantsInStr', privateChat.participantsInStr);
                   cache.getClient().expire(privateChat._id, 600);
                 }
           

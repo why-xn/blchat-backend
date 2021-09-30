@@ -17,11 +17,11 @@ router.get('/', auth, async (req, res, next) => {
   }
 
   if (queryRole !== undefined && queryRole !== null && queryRole.length > 0) {
-    var users = await User.find({role: queryRole});
+    var users = await User.find({role: queryRole, _id: { $ne: req.user.userId }});
   } else if (role !== 'ADMIN') {
-    var users = await User.find({ role: { $ne: 'ADMIN' } });
+    var users = await User.find({ role: { $ne: 'ADMIN' }, _id: { $ne: req.user.userId } });
   } else {
-    var users = await User.find();
+    var users = await User.find({ _id: { $ne: req.user.userId }});
   }
   
   res.status(200).json({status: 'success', data: users});

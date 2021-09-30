@@ -36,9 +36,15 @@ const LastMessageSchema = new Schema({
     seenByRecipient: Boolean
 });
 
+const ParticipantSchema = new Schema({
+    id: String,
+    displayName: String,
+    role: String
+});
+
 const PrivateChatSchema = new Schema({
     _id: String,
-    participants: [String],
+    participants: [ParticipantSchema],
     participantsInStr: String,
     type: String, // V2V (VISITOR TO VISITOR), V2E (VISITOR TO EXHIBITOR)
     state: String, // REQUESTED, APPROVED

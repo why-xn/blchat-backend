@@ -48,7 +48,7 @@ router.post("/register", async (req, res) => {
 
     // Create token
     const token = jwt.sign(
-      { userId: user._id, username },
+      { userId: user._id, role, username, displayName },
       process.env.TOKEN_KEY,
       {
         expiresIn: "2h",
