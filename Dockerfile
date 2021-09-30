@@ -12,6 +12,8 @@ ENV MONGODB_PASSWORD=changeit
 ENV REDIS_HOST=localhost
 ENV REDIS_PORT=6379
 
+RUN apt-get update && apt-get -y install curl ca-certificates vim && update-ca-certificates
+
 WORKDIR /app
 COPY . .
 
