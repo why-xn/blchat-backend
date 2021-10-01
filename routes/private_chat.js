@@ -10,7 +10,7 @@ var sio = require('../socket.io/socket');
 
 router.get('/', auth, async function(req, res, next) {
   const requesterId = req.user.id;
-  const privateChatList = await PrivateChat.find({ "participants.id": requesterId }).sort({"lastMessage.date": "desc"});
+  const privateChatList = await PrivateChat.find({ "participants.id": requesterId, status: 'V' }).sort({"lastMessage.date": "desc"});
   return res.status(200).json({status: 'success', data: privateChatList});
 });
 
@@ -18,7 +18,7 @@ router.get('/', auth, async function(req, res, next) {
 router.get('/:chatId', auth, async function(req, res, next) {
   const requesterId = req.user.id;
   const chatId = req.params.chatId;
-  const existingPrivateChat = await PrivateChat.findOne({ id: chatId });
+  const existingPrivateChat = await PrivateChat.findOne({ id: chatId, status: 'V' });
   if (!existingPrivateChat.participantsInStr.includes(requesterId)) {
     return res.status(400).json({status: 'error', msg: 'Permission Denied'});
   }
@@ -36,12 +36,12 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
     return res.status(400).json({status: 'error', msg: 'You cannot chat with yourself'});
   }
 
-  var otherParticipant = await User.findOne({id: otherParticipantId});
+  var otherParticipant = await User.findOne({id: otherParticipantId, status: 'V'});
 
   const participantsInStr_1 = requesterId + ',' + otherParticipantId;
   const participantsInStr_2 = otherParticipantId + ',' + requesterId;
 
-  const existingPrivateChat = await PrivateChat.findOne({ $or:[ {'participantsInStr': participantsInStr_1}, {'participantsInStr': participantsInStr_2} ]});
+  const existingPrivateChat = await PrivateChat.findOne({ status: 'V', $or:[ {'participantsInStr': participantsInStr_1}, {'participantsInStr': participantsInStr_2} ]});
   if (!existingPrivateChat) {
     if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'EXHIBITOR') {
       return res.status(400).json({status: 'error', msg: 'Exhibitor to Exhibitor Chat is not allowed'});
@@ -70,7 +70,7 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
       type: 'V2E',
       state: 'APPROVED',
       status: 'V',
-      createDate: new Date(),
+      createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}),
       createdBy: requesterId
     });
     newPrivateChat.save().then(() => {
@@ -94,7 +94,7 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
     return res.status(400).json({status: 'error', msg: 'You cannot chat with yourself'});
   }
 
-  var otherParticipant = await User.findOne({id: otherParticipantId});
+  var otherParticipant = await User.findOne({id: otherParticipantId, status: 'V'});
   if (req.user.role === otherParticipant.role && req.user.role === 'VISITOR') {
     // do nothing
   } else {
@@ -104,7 +104,7 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
   const participantsInStr_1 = requesterId + ',' + otherParticipantId;
   const participantsInStr_2 = otherParticipantId + ',' + requesterId;
 
-  const existingPrivateChat = await PrivateChat.findOne({ $or:[ {'participantsInStr': participantsInStr_1}, {'participantsInStr': participantsInStr_2} ]});
+  const existingPrivateChat = await PrivateChat.findOne({ status: 'V', $or:[ {'participantsInStr': participantsInStr_1}, {'participantsInStr': participantsInStr_2} ]});
   if (existingPrivateChat && existingPrivateChat.state === 'APPROVED') {
     return res.status(200).json({status: 'success', msg: 'Request already approved', data: existingPrivateChat});
   } else if(existingPrivateChat && existingPrivateChat.state === 'REQUESTED') {
@@ -129,7 +129,7 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
       type: 'V2V',
       state: 'REQUESTED',
       status: 'V',
-      createDate: new Date(),
+      createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}),
       createdBy: requesterId
     });
     newPrivateChat.save().then(() => {
@@ -148,7 +148,7 @@ router.post('/request/approve/:chatId', auth, async function(req, res, next) {
   const requesterId = req.user.id;
   const chatId = req.params.chatId;
 
-  const existingPrivateChat = await PrivateChat.findOne({id: chatId});
+  const existingPrivateChat = await PrivateChat.findOne({id: chatId, status: 'V'});
   if (!existingPrivateChat) {
     return res.status(400).json({status: 'error', msg: 'Private chat not found'});
   } else if (existingPrivateChat.participants[0].id !== requesterId && existingPrivateChat.participants[1].id !== requesterId) {

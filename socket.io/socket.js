@@ -27,7 +27,7 @@ async function saveChatMessage (chatId, chatType, msg, senderId, senderDisplayNa
     });
 
     if(chatType == 'P') {
-      const existingPrivateChat = await PrivateChat.findOne({ id: chatId });
+      const existingPrivateChat = await PrivateChat.findOne({ id: chatId, status: 'V' });
       existingPrivateChat.lastMessage = {
         msg: msg,
         sender: senderId,
@@ -51,7 +51,10 @@ module.exports = {
         });
 
         io.use((socket, next) => {
-            const token = socket.handshake.auth.token;
+            var token = socket.handshake.auth.token;
+            if (!token) {
+              token = socket.handshake.query.token;
+            }
             try {
               const decoded = jwt.verify(token, config.TOKEN_KEY);
               socket.user = decoded;

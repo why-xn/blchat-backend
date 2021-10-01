@@ -23,12 +23,20 @@ router.post("/register", async (req, res) => {
 
     // Validate user input
     if (!(displayName && password && username && role)) {
-      res.status(400).send("All input is required");
+      res.status(400).send({status: 'error', msg: 'Missing one or many required inputs'});
+    }
+
+    if (role === 'ADMIN') {
+      res.status(400).send({status: 'error', msg: 'Self Registration for Admin is not allowed'});
+    }
+
+    if (role !== 'VISITOR' && role !== 'EXHIBITOR') {
+      res.status(400).send({status: 'error', msg: 'Invalid role'});
     }
 
     // check if user already exist
     // Validate if user exist in our database
-    const oldUser = await User.findOne({ username });
+    const oldUser = await User.findOne({ username: username, status: 'V'});
 
     if (oldUser) {
       return res.status(409).json({status: 'warning', msg: 'User already exists. Please login.'})
@@ -43,7 +51,9 @@ router.post("/register", async (req, res) => {
       displayName: displayName,
       username: username,
       password: encryptedPassword,
-      role: role
+      role: role,
+      status: 'V',
+      createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
     });
 
     // Create token
@@ -51,7 +61,7 @@ router.post("/register", async (req, res) => {
       { id: user.id, role, username, displayName },
       process.env.TOKEN_KEY,
       {
-        expiresIn: "2h",
+        expiresIn: "24h",
       }
     );
     // save user token
@@ -78,7 +88,7 @@ router.post("/login", async (req, res) => {
       res.status(400).send("All input is required");
     }
     // Validate if user exist in our database
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username: username, status: 'V' });
 
     if (user && (await bcrypt.compare(password, user.password))) {
       // Create token
@@ -86,7 +96,7 @@ router.post("/login", async (req, res) => {
         { id: user.id, role: user.role, displayName: user.displayName, username },
         process.env.TOKEN_KEY,
         {
-          expiresIn: "2h",
+          expiresIn: "24h",
         }
       );
 

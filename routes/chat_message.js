@@ -6,15 +6,19 @@ const {
 const auth = require("../middleware/auth");
 var { ChatMessage, GroupChat, PrivateChat } = require('../db/model/models');
 
+function getChatType(chatId) {
+  return chatId.substring(0, 2) === 'pc' ? 'P' : 'G';
+}
 
 /* GET Chat Messages */
-router.get('/:chatType/:chatId', auth, async (req, res, next) => {
+router.get('/:chatId', auth, async (req, res, next) => {
   const { role } = req.user;
-  const chatType = req.params.chatType.toUpperCase();
   const chatId = req.params.chatId;
+  const chatType = getChatType(chatId);
+
   if (role !== 'ADMIN') {
-      if (chatType == 'GROUP') {
-        const groupChat = await GroupChat.findOne({ id: chatId });
+      if (chatType == 'G') {
+        const groupChat = await GroupChat.findOne({ id: chatId, status: 'V' });
         if (groupChat == null || groupChat == undefined) {
           return res.status(400).json({status: 'error', msg: 'Not Found'});
         }
@@ -22,7 +26,7 @@ router.get('/:chatType/:chatId', auth, async (req, res, next) => {
           return res.status(400).json({status: 'warning', msg: 'Private Group Chat is disabled for now'});
         }
       } else {
-        const privateChat = await PrivateChat.findOne({id: chatId});
+        const privateChat = await PrivateChat.findOne({id: chatId, status: 'V'});
         if (privateChat == null || privateChat == undefined) {
           return res.status(400).json({status: 'error', msg: 'Not Found'});
         }
