@@ -8,7 +8,7 @@ const UserSchema = new Schema({
     username: { type: String, unique: true },
     password: String,
     activeConnections: Number,
-    role: String, // ADMIN, VISITOR, EXHIBITOR
+    role: String, // ADMIN, VISITOR, EXHIBITOR, FRONT_DESK
     token: String,
     status: String, // V (VALID), D (DELETED)
     createDate: Date
@@ -72,7 +72,7 @@ const PrivateChatSchema = new Schema({
     id: String,
     participants: [ParticipantSchema],
     participantsInStr: String,
-    type: String, // V2V (VISITOR TO VISITOR), V2E (VISITOR TO EXHIBITOR)
+    type: String, // V2V (VISITOR TO VISITOR), V2E (VISITOR TO EXHIBITOR), E2E (EXHIBITOR TO EXHIBITOR)
     state: String, // REQUESTED, APPROVED
     requestedBy: String,
     lastMessage: LastMessageSchema,

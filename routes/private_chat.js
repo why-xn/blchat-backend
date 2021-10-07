@@ -44,7 +44,7 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
   const existingPrivateChat = await PrivateChat.findOne({ status: 'V', $or:[ {'participantsInStr': participantsInStr_1}, {'participantsInStr': participantsInStr_2} ]});
   if (!existingPrivateChat) {
     if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'EXHIBITOR') {
-      return res.status(400).json({status: 'error', msg: 'Exhibitor to Exhibitor Chat is not allowed'});
+      return res.status(200).json({status: 'success', msg: 'You can request the user for private chat', data: {type: 'E2E', state: 'NONE', canRequest: true}});
     } else if (req.user.role === 'VISITOR' && otherParticipant.role === 'VISITOR') {
       return res.status(200).json({status: 'success', msg: 'You can request the user for private chat', data: {type: 'V2V', state: 'NONE', canRequest: true}});
     } else if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'VISITOR') {
@@ -94,9 +94,12 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
     return res.status(400).json({status: 'error', msg: 'You cannot chat with yourself'});
   }
 
+  var privateChatType = 'V2V';
   var otherParticipant = await User.findOne({id: otherParticipantId, status: 'V'});
   if (req.user.role === otherParticipant.role && req.user.role === 'VISITOR') {
     // do nothing
+  } else if (req.user.role === otherParticipant.role && req.user.role === 'EXHIBITOR') {
+    privateChatType = 'E2E';
   } else {
     return res.status(400).json({status: 'success', msg: 'Not allowed to send request for private chat'});
   }
@@ -126,13 +129,16 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
       ],
       participantsInStr: participantsInStr_1,
       requestedBy: requesterId,
-      type: 'V2V',
+      type: privateChatType,
       state: 'REQUESTED',
       status: 'V',
       createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}),
       createdBy: requesterId
     });
     newPrivateChat.save().then(() => {
+      //broadcasting to recipient for the notification
+      sio.getSocketIO().to(otherParticipant.id).emit("msg-channel", {code: 'NEW_PRIVATE_CHAT_REQUEST', chatId: existingPrivateChat.id, msg: req.user.displayName + ' has sent you a request for private chat', senderId: 'server', senderDisplayName: 'Server'});
+      
       return res.status(200).json({status: 'success', msg: 'Request sent', data: newPrivateChat});
     }).
     catch(error => {
