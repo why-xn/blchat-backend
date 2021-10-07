@@ -13,6 +13,7 @@ ENV MONGODB_USERNAME=root
 ENV MONGODB_PASSWORD=changeit
 ENV REDIS_HOST=localhost
 ENV REDIS_PORT=6379
+ENV THIRD_PARTY_AUTH_CHECK_API=https://wcit21.appswind.com/backend/api/auth/my-self
 
 RUN apt-get update && apt-get -y install curl ca-certificates vim && update-ca-certificates
 

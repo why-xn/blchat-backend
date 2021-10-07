@@ -14,6 +14,7 @@ var groupChatRouter = require('./routes/group_chat')
 var privateChatRouter = require('./routes/private_chat')
 var chatRouter = require('./routes/chat');
 var chatMessageRouter = require('./routes/chat_message');
+var notificationRouter = require('./routes/notification');
 
 require("dotenv").config();
 
@@ -40,6 +41,7 @@ app.use('/api/v1/chats/group', groupChatRouter)
 app.use('/api/v1/chats/private', privateChatRouter)
 app.use('/chat', chatRouter);
 app.use('/api/v1/chat/messages', chatMessageRouter);
+app.use('/api/v1/notifications', notificationRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

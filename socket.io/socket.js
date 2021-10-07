@@ -3,7 +3,7 @@ require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const axios = require('axios');
 var cache = require("../cache/redis");
-var { GroupChat, PrivateChat, ChatMessage, User } = require('../db/model/models');
+var { GroupChat, PrivateChat, ChatMessage, User, GroupChatParticipant } = require('../db/model/models');
 const { 
     v4: uuidv4,
   } = require('uuid');
@@ -51,181 +51,217 @@ module.exports = {
             }
         });
 
+        // authentication middleware
         io.use(async (socket, next) => {
-            var token = socket.handshake.auth.token;
-            if (!token) {
-              token = socket.handshake.query.token;
-            }
+          var token = socket.handshake.auth.token;
+          if (!token) {
+            token = socket.handshake.query.token;
+          }
 
-            try {
-              const decoded = jwt.verify(token, config.TOKEN_KEY);
-              socket.user = decoded;
+          try {
+            const decoded = jwt.verify(token, config.TOKEN_KEY);
+            socket.user = decoded;
+            return next();
+          } catch (err) {
+            
+          }
+
+          try {
+            var user = await cache.hgetall(token);
+            if (user && user.id) {
+              socket.user = user;
               return next();
-            } catch (err) {
-              
             }
-
-            try {
-              var user = await cache.hgetall(token);
-              if (user && user.id) {
-                socket.user = user;
-                return next();
+      
+            let data = {};
+            let config = {
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
               }
-        
-              let data = {};
-              let config = {
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': 'Bearer ' + token
-                }
+            }
+            
+            const response = await axios.post(process.env.THIRD_PARTY_AUTH_CHECK_API, data, config);
+            if (response && response.data && response.data.data && response.data.data.id) {
+              user = {
+                id: response.data.data.id.toString(),
+                displayName: response.data.data.displayName,
+                displayPicture: response.data.data.displayPicture != null ? response.data.data.displayPicture : "",
+                username: response.data.data.username,
+                role: response.data.data.role != null ? response.data.data.role.toUpperCase() : 'VISITOR',
               }
-              
-              const response = await axios.post(process.env.THIRD_PARTY_AUTH_CHECK_API, data, config);
-              if (response && response.data && response.data.data && response.data.data.id) {
-                user = {
-                  id: response.data.data.id.toString(),
-                  displayName: response.data.data.displayName,
-                  displayPicture: response.data.data.displayPicture != null ? response.data.data.displayPicture : "",
-                  username: response.data.data.username,
-                  role: response.data.data.role != null ? response.data.data.role.toUpperCase() : 'VISITOR',
-                }
-                socket.user = user;
-        
-                cache.getClient().hset(token, 'id', user.id, 'displayName', user.displayName, 'displayPicture', user.displayPicture, 'username', user.username, 'role', user.role);
-                cache.getClient().expire(token, 600);
+              socket.user = user;
+      
+              cache.getClient().hset(token, 'id', user.id, 'displayName', user.displayName, 'displayPicture', user.displayPicture, 'username', user.username, 'role', user.role);
+              cache.getClient().expire(token, 600);
 
-                const oldUser = await User.findOne({ username: user.username, status: 'V'});
-                if (!oldUser) {
-                  // Create user in our database
-                  await User.create({
-                    id: user.id,
-                    displayName: user.displayName,
-                    username: user.username,
-                    password: '',
-                    role: user.role,
-                    status: 'V',
-                    createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
-                  }); 
-                }
-                return next();
-
-              } else {
-                err = new Error("not authorized");
-                err.data = { msg: "user not found" }; 
-                next(err);
+              const oldUser = await User.findOne({ username: user.username, status: 'V'});
+              if (!oldUser) {
+                // Create user in our database
+                await User.create({
+                  id: user.id,
+                  displayName: user.displayName,
+                  username: user.username,
+                  password: '',
+                  role: user.role,
+                  status: 'V',
+                  createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
+                }); 
               }
-            } catch(err) {
-              console.log(err);
+              return next();
+
+            } else {
               err = new Error("not authorized");
-              err.data = { msg: "invalid token" }; 
+              err.data = { msg: "user not found" }; 
               next(err);
             }
-          });
+          } catch(err) {
+            console.log(err);
+            err = new Error("not authorized");
+            err.data = { msg: "invalid token" }; 
+            next(err);
+          }
+        });
           
-          io.on('connection', (socket) => {
-            if (!socket.user) {
-              setTimeout(() => {
-                socket.disconnect();
-              }, 500);
-            } else {
-              console.log('User: ' + socket.user.displayName + ' just connected. Socket ID: ' + socket.id);
-          
-              // join self channel
-              socket.join(socket.user.id);
 
-              socket.on("disconnect", (reason) => {
-                console.log('Socket disconnected - ', socket.id, ':', reason);
-                if (socket.user) {
-                    socket.leave(socket.user.id);
-                }
-              });
-              
-              // join public group chat
-              socket.on('join', async function (input) {
-                const chatType = getChatType(input.chatId);
-                if (chatType === 'G') {
-                  var publicGroupChat = await GroupChat.findOne({id: input.chatId, mode: 'PUBLIC', status: 'V'});
-                  if (publicGroupChat) {
-                    socket.join(input.chatId);
-                    //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just joined the room!', 'server', 'Server');
-                    io.to(input.chatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: input.chatId, msg: socket.user.displayName + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
-                  } else {
-                    //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
-                    socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_FAILED', chatId: input.chatId, msg: 'Group Chat not found'});
-                  }
-                } else {
-                  var privateChat = await PrivateChat.findOne({id: input.chatId, "participants.id": socket.user.id, status: 'V'});
-                  if (privateChat) {
-                    socket.join(input.chatId);
-                  } else {
-                    socket.emit("msg-channel", {code: 'JOIN_PRIVATE_CHAT_FAILED', chatId: input.chatId, msg: 'Private Chat not found'});
-                  }
-                }
-                
-              });
-          
-              // leave public group chat
-              socket.on('leave', async function (publicGroupChatId) {
-                var publicGroupChat = await GroupChat.findOne({id: publicGroupChatId, mode: 'PUBLIC', status: 'V'});
+        // on new connection
+        io.on('connection', (socket) => {
+          if (!socket.user) {
+            setTimeout(() => {
+              socket.disconnect();
+            }, 500);
+          } else {
+            console.log('User: ' + socket.user.displayName + ' just connected. Socket ID: ' + socket.id);
+        
+            // join self channel
+            socket.join(socket.user.id);
+
+            socket.on("disconnect", (reason) => {
+              console.log('Socket disconnected - ', socket.id, ':', reason);
+              if (socket.user) {
+                  socket.leave(socket.user.id);
+              }
+            });
+            
+            // join public group chat
+            socket.on('join', async function (input) {
+              const chatType = getChatType(input.chatId);
+              if (chatType === 'G') {
+                var publicGroupChat = await GroupChat.findOne({id: input.chatId, mode: 'PUBLIC', status: 'V'});
                 if (publicGroupChat) {
-                  socket.leave(publicGroupChatId);
-                  //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just left the room!', 'server', 'Server');
-                  io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.displayName + ' just left the room!', senderId: 'server', senderDisplayName: 'Server'});
+                  socket.join(input.chatId);
+                  //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just joined the room!', 'server', 'Server');
+                  io.to(input.chatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: input.chatId, msg: socket.user.displayName + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
+
+                  // updating group chat participants
+                  var groupChatParticipant = await GroupChatParticipant.findOne({chatId: input.chatId, 'participant.id': socket.user.id});
+                  if (groupChatParticipant) {
+                    groupChatParticipant.participant.activeConnections++;
+                    groupChatParticipant.save();
+                  } else {
+                    GroupChatParticipant.create({
+                        id: uuidv4(),
+                        chatId: chatId,
+                        participant: {
+                          id: socket.user.id,
+                          displayName: socket.user.displayName,
+                          role: socket.user.role,
+                          username: socket.user.username,
+                          activeConnections: 1
+                        },
+                        status: 'V',
+                        createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
+                    });
+                  }
+
                 } else {
                   //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
-                  socket.emit("msg-channel", {code: 'LEAVE_GROUP_CHAT_FAILED', chatId: publicGroupChatId, msg: 'Group Chat not found'});
+                  socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_FAILED', chatId: input.chatId, msg: 'Group Chat not found'});
                 }
-              });
-                   
-              // on msg from client
-              socket.on('msg-channel', async incomingData => {
-                console.log(incomingData);
-                
-                const chatType = getChatType(incomingData.chatId);
+              } else {
+                var privateChat = await PrivateChat.findOne({id: input.chatId, "participants.id": socket.user.id, status: 'V'});
+                if (privateChat) {
+                  socket.join(input.chatId);
+                } else {
+                  socket.emit("msg-channel", {code: 'JOIN_PRIVATE_CHAT_FAILED', chatId: input.chatId, msg: 'Private Chat not found'});
+                }
+              }
+              
+            });
+        
+            // leave public group chat
+            socket.on('leave', async function (publicGroupChatId) {
+              var publicGroupChat = await GroupChat.findOne({id: publicGroupChatId, mode: 'PUBLIC', status: 'V'});
+              if (publicGroupChat) {
+                socket.leave(publicGroupChatId);
+                //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just left the room!', 'server', 'Server');
+                io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.displayName + ' just left the room!', senderId: 'server', senderDisplayName: 'Server'});
 
-                // checking permission
-                const chatInfo = await cache.hgetall(incomingData.chatId);
-                if (chatInfo && chatType == 'G' && chatInfo.chatType == 'G') {
-                  // do nothing
-                } else if (!chatInfo && chatType == 'G') {
-                  var publicGroupChat = await GroupChat.findOne({id: incomingData.chatId, mode: 'PUBLIC', status: 'V'});
-                  if (!publicGroupChat) {
-                    return;
+                // updating group chat participants
+                var groupChatParticipant = await GroupChatParticipant.findOne({chatId: input.chatId, 'participant.id': socket.user.id});
+                if (groupChatParticipant) {
+                  groupChatParticipant.participant.activeConnections--;
+                  if (groupChatParticipant.participant.activeConnections < 0) {
+                    groupChatParticipant.participant.activeConnections = 0;
                   }
-                  cache.getClient().hset(incomingData.chatId, 'id', publicGroupChat.id, 'chatType', 'G', 'groupMode', 'PUBLIC');
-                  cache.getClient().expire(incomingData.chatId, 600);
-                } else if (chatInfo && chatInfo.chatType != 'G' && chatType != 'G') {
-                  if (!chatInfo.participantsInStr.includes(socket.user.id)) {
-                    return
-                  }
-                } else if (!chatInfo && chatType != 'G') {
-                  var privateChat = await PrivateChat.findOne({id: incomingData.chatId, status: 'V'});
-                  if (!privateChat || privateChat.state !== 'APPROVED') {
-                    io.to(socket.id).emit("msg-channel", {code: 'PERMISSION_DENIED', chatId: privateChat.id, msg: 'You reqeust for private chat has not been accepted yet', senderId: 'server', senderDisplayName: 'Server'});
-                    return;
-                  }
-                  if (!privateChat.participantsInStr.includes(socket.user.id)) {
-                    return;
-                  }
-                  
-                  cache.getClient().hset(privateChat.id, 'id', privateChat.id, 'chatType', chatType, 'participantsInStr', privateChat.participantsInStr);
-                  cache.getClient().expire(privateChat.id, 600);
+                  groupChatParticipant.save();
                 }
-          
-                const dateTime = new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
-                const chatMsg = await saveChatMessage(incomingData.chatId, chatType, incomingData.msg, socket.user.id, socket.user.displayName, dateTime);
-                io.to(incomingData.chatId).emit("msg-channel", {
-                  code: 'NEW_CHAT_MSG',
-                  chatId: incomingData.chatId, 
-                  msgId: chatMsg.id,
-                  msg: incomingData.msg,
-                  senderId: socket.user.id, 
-                  senderDisplayName: socket.user.displayName,
-                  sentAt: dateTime
-                });
+
+              } else {
+                //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
+                socket.emit("msg-channel", {code: 'LEAVE_GROUP_CHAT_FAILED', chatId: publicGroupChatId, msg: 'Group Chat not found'});
+              }
+            });
+                  
+            // on msg from client
+            socket.on('msg-channel', async incomingData => {
+              console.log(incomingData);
+              
+              const chatType = getChatType(incomingData.chatId);
+
+              // checking permission
+              const chatInfo = await cache.hgetall(incomingData.chatId);
+              if (chatInfo && chatType == 'G' && chatInfo.chatType == 'G') {
+                // do nothing
+              } else if (!chatInfo && chatType == 'G') {
+                var publicGroupChat = await GroupChat.findOne({id: incomingData.chatId, mode: 'PUBLIC', status: 'V'});
+                if (!publicGroupChat) {
+                  return;
+                }
+                cache.getClient().hset(incomingData.chatId, 'id', publicGroupChat.id, 'chatType', 'G', 'groupMode', 'PUBLIC');
+                cache.getClient().expire(incomingData.chatId, 600);
+              } else if (chatInfo && chatInfo.chatType != 'G' && chatType != 'G') {
+                if (!chatInfo.participantsInStr.includes(socket.user.id)) {
+                  return
+                }
+              } else if (!chatInfo && chatType != 'G') {
+                var privateChat = await PrivateChat.findOne({id: incomingData.chatId, status: 'V'});
+                if (!privateChat || privateChat.state !== 'APPROVED') {
+                  io.to(socket.id).emit("msg-channel", {code: 'PERMISSION_DENIED', chatId: privateChat.id, msg: 'You reqeust for private chat has not been accepted yet', senderId: 'server', senderDisplayName: 'Server'});
+                  return;
+                }
+                if (!privateChat.participantsInStr.includes(socket.user.id)) {
+                  return;
+                }
+                
+                cache.getClient().hset(privateChat.id, 'id', privateChat.id, 'chatType', chatType, 'participantsInStr', privateChat.participantsInStr);
+                cache.getClient().expire(privateChat.id, 600);
+              }
+        
+              const dateTime = new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
+              const chatMsg = await saveChatMessage(incomingData.chatId, chatType, incomingData.msg, socket.user.id, socket.user.displayName, dateTime);
+              io.to(incomingData.chatId).emit("msg-channel", {
+                code: 'NEW_CHAT_MSG',
+                chatId: incomingData.chatId, 
+                msgId: chatMsg.id,
+                msg: incomingData.msg,
+                senderId: socket.user.id, 
+                senderDisplayName: socket.user.displayName,
+                sentAt: dateTime
               });
-            }
-          });
+            });
+          }
+        });
 
     },
     getSocketIO: () => {

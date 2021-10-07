@@ -6,6 +6,7 @@ const {
 const auth = require("../middleware/auth");
 var { PrivateChat, User } = require('../db/model/models');
 var sio = require('../socket.io/socket');
+var notification = require('../core/api/v1/notification');
 
 
 router.get('/', auth, async function(req, res, next) {
@@ -137,8 +138,8 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
     });
     newPrivateChat.save().then(() => {
       //broadcasting to recipient for the notification
-      sio.getSocketIO().to(otherParticipant.id).emit("msg-channel", {code: 'NEW_PRIVATE_CHAT_REQUEST', chatId: existingPrivateChat.id, msg: req.user.displayName + ' has sent you a request for private chat', senderId: 'server', senderDisplayName: 'Server'});
-      
+      notification.create('NOTIFICATION_NEW_PRIVATE_CHAT_REQUEST', {userId: otherParticipant.id, chatId: existingPrivateChat.id, msg: req.user.displayName + ' has sent you a request for private chat'});
+
       return res.status(200).json({status: 'success', msg: 'Request sent', data: newPrivateChat});
     }).
     catch(error => {
@@ -172,7 +173,7 @@ router.post('/request/approve/:chatId', auth, async function(req, res, next) {
       }
       
       //broadcasting to recipient for the notification
-      sio.getSocketIO().to(otherParticipantId).emit("msg-channel", {code: 'PRIVATE_CHAT_APPROVED', chatId: existingPrivateChat.id, msg: req.user.displayName + ' has accepted your request for private chat', senderId: 'server', senderDisplayName: 'Server'});
+      notification.create('NOTIFICATION_PRIVATE_CHAT_REQUEST_APPROVED', {userId: otherParticipant.id, chatId: existingPrivateChat.id, msg: req.user.displayName + ' has accepted your request for private chat'});
       
       return res.status(200).json({status: 'success', msg: 'Request approved', data: existingPrivateChat});
     }).

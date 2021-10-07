@@ -47,7 +47,7 @@ const verifyToken = async (req, res, next) => {
         req.user = user;
 
         cache.getClient().hset(token, 'id', user.id, 'displayName', user.displayName, 'displayPicture', user.displayPicture, 'username', user.username, 'role', user.role);
-        cache.getClient().expire(token, 60);
+        cache.getClient().expire(token, 600);
 
         const oldUser = await User.findOne({ username: user.username, status: 'V'});
         if (!oldUser) {
