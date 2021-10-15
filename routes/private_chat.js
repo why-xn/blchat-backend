@@ -50,6 +50,19 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
       return res.status(200).json({status: 'success', msg: 'You can request the user for private chat', data: {type: 'V2V', state: 'NONE', canRequest: true}});
     } else if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'VISITOR') {
       return res.status(400).json({status: 'error', msg: 'Exhibitor cannot initiate chat with a Visitor'});
+    } else if (req.user.role === 'HELP_DESK' && otherParticipant.role === 'HELP_DESK') {
+      return res.status(200).json({status: 'success', msg: 'Help Desk to Help Desk chat is not allowed', data: {type: 'H2H', state: 'NONE', canRequest: false}});
+    } else if (req.user.role === 'HELP_DESK' && otherParticipant.role === 'VISITOR') {
+      return res.status(400).json({status: 'error', msg: 'Help Desk User cannot initiate chat with a Visitor'});
+    } else if (req.user.role === 'HELP_DESK' && otherParticipant.role === 'EXHIBITOR') {
+      return res.status(400).json({status: 'error', msg: 'Help Desk User cannot initiate chat with an Exhibitor'});
+    }
+
+    var privateChatType = 'V2E';
+    if (req.user.role === 'VISITOR' && otherParticipant.role === 'HELP_DESK') {
+      privateChatType = 'V2H';
+    } else if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'HELP_DESK') {
+      privateChatType = 'E2H';
     }
 
     const newPrivateChat = new PrivateChat({
@@ -68,7 +81,7 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
       ],
       participantsInStr: participantsInStr_1,
       requesterBy: requesterId,
-      type: 'V2E',
+      type: privateChatType,
       state: 'APPROVED',
       status: 'V',
       createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}),
