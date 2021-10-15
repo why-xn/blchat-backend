@@ -13,7 +13,7 @@ router.get('/', auth, async (req, res, next) => {
   
   const queryRole = req.query.role.toUpperCase();
   if (role !== 'ADMIN' && queryRole == 'ADMIN') {
-    return res.sendStatus(403);
+    res.status(403).json({status: 'error', msg: 'Query not allowed'});
   }
 
   if (queryRole !== undefined && queryRole !== null && queryRole.length > 0) {
@@ -27,6 +27,57 @@ router.get('/', auth, async (req, res, next) => {
   res.status(200).json({status: 'success', data: users});
 });
 
+
+// create new user by admin
+router.post("/", auth, async (req, res) => {
+  const { role } = req.user;
+  if (role !== 'ADMIN') {
+    res.status(403).json({status: 'error', msg: 'Permission denied'});
+  }
+
+  try {
+    // Get user input
+    const { displayName, username, password, role } = req.body;
+
+    // Validate user input
+    if (!(displayName && password && username && role)) {
+      res.status(400).send({status: 'error', msg: 'Missing one or many required inputs'});
+    }
+
+    if (role !== 'VISITOR' && role !== 'EXHIBITOR' && role !== 'ADMIN' && role !== 'HELP_DESK') {
+      res.status(400).send({status: 'error', msg: 'Invalid role'});
+    }
+
+    // check if user already exist
+    // Validate if user exist in our database
+    const oldUser = await User.findOne({ username: username, status: 'V'});
+
+    if (oldUser) {
+      return res.status(409).json({status: 'warning', msg: 'User already exists. Please login.'})
+    }
+
+    //Encrypt user password
+    encryptedPassword = await bcrypt.hash(password, 10);
+
+    // Create user in our database
+    const user = await User.create({
+      id: uuidv4(),
+      displayName: displayName,
+      username: username,
+      password: encryptedPassword,
+      role: role,
+      status: 'V',
+      createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
+    });
+
+    // return new user
+    res.status(201).json({status: 'success', data: user});
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({status: 'error', msg: 'Error occurred while processing request'});
+  }
+  
+});
 
 
 
@@ -44,7 +95,7 @@ router.get("/welcome", auth, (req, res) => {
 
 
 
-router.get('/test', function(req, res, next) {
+/*router.get('/test', function(req, res, next) {
   const shihab = new User({
     id: uuidv4(),
     displayName: 'Shihab Hasan',
@@ -59,6 +110,6 @@ router.get('/test', function(req, res, next) {
 router.get('/dbtest', function(req, res, next) {
   db.test();
   res.send('DB Test Successful');
-});
+});*/
 
 module.exports = router;

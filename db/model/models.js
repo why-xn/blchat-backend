@@ -37,6 +37,7 @@ const GroupChatSchema = new Schema({
     name: String,
     displayPicture: String,
     mode: String, // PUBLIC, PRIVATE
+    allowedRoles: [String],
     status: String, // V (VALID), D (DELETED)
     createDate: Date
 });

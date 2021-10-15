@@ -8,7 +8,12 @@ var { GroupChat } = require('../db/model/models');
 
 /* GET GroupChat listing. */
 router.get('/public', auth, async (req, res, next) => {
-  var publicGroupChats = await GroupChat.find({mode: 'PUBLIC', status: 'V'});
+  const { role } = req.user;
+  if (role !== 'ADMIN') {
+    var publicGroupChats = await GroupChat.find({mode: 'PUBLIC', status: 'V', allowedRoles: role});
+  } else {
+    var publicGroupChats = await GroupChat.find({mode: 'PUBLIC', status: 'V'});
+  }
   return res.status(200).json({status: 'success', data: publicGroupChats});
 });
 
@@ -19,7 +24,7 @@ router.post('/public', auth, async function(req, res, next) {
   if (role !== 'ADMIN') {
     return res.status(403).json({status: 'error', msg: 'Permission Denied'});
   }
-  const { name, displayPicture } = req.body;
+  const { name, displayPicture, allowedRoles } = req.body;
 
   const existingGroupChat = await GroupChat.findOne({ name: name, status: 'V' });
   if (existingGroupChat) {
@@ -31,6 +36,7 @@ router.post('/public', auth, async function(req, res, next) {
     name: name,
     displayPicture: displayPicture,
     mode: 'PUBLIC',
+    allowedRoles: allowedRoles,
     status: 'V',
     createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
   });

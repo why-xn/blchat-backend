@@ -116,7 +116,7 @@ module.exports = {
               next(err);
             }
           } catch(err) {
-            console.log(err);
+            //console.log(err);
             err = new Error("not authorized");
             err.data = { msg: "invalid token" }; 
             next(err);
@@ -145,35 +145,44 @@ module.exports = {
             
             // join public group chat
             socket.on('join', async function (input) {
+              console.log('[DEBUG] request to join public group. ', socket.user.id, input.chatId);
+              console.log('[DEBUG] Input: ', JSON.stringify(input));
+              if (!input || !input.chatId) {
+                return;
+              }
               const chatType = getChatType(input.chatId);
               if (chatType === 'G') {
                 var publicGroupChat = await GroupChat.findOne({id: input.chatId, mode: 'PUBLIC', status: 'V'});
                 if (publicGroupChat) {
-                  socket.join(input.chatId);
-                  //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just joined the room!', 'server', 'Server');
-                  io.to(input.chatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: input.chatId, msg: socket.user.displayName + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
-
-                  // updating group chat participants
-                  var groupChatParticipant = await GroupChatParticipant.findOne({chatId: input.chatId, 'participant.id': socket.user.id});
-                  if (groupChatParticipant) {
-                    groupChatParticipant.participant.activeConnections++;
-                    groupChatParticipant.save();
+                  if (socket.user.role !== 'ADMIN' && !publicGroupChat.allowedRoles.includes(socket.user.role)) {
+                    socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_FAILED', chatId: input.chatId, msg: 'Permission denied'});
                   } else {
-                    GroupChatParticipant.create({
-                        id: uuidv4(),
-                        chatId: chatId,
-                        participant: {
-                          id: socket.user.id,
-                          displayName: socket.user.displayName,
-                          role: socket.user.role,
-                          username: socket.user.username,
-                          activeConnections: 1
-                        },
-                        status: 'V',
-                        createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
-                    });
-                  }
+                    socket.join(input.chatId);
+                    //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just joined the room!', 'server', 'Server');
+                    socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_SUCCESS', chatId: input.chatId, msg: 'Joined group chat'});
+                    io.to(input.chatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: input.chatId, msg: socket.user.displayName + ' just joined the room!', senderId: 'server', senderDisplayName: 'Server'});
 
+                    // updating group chat participants
+                    var groupChatParticipant = await GroupChatParticipant.findOne({chatId: input.chatId, 'participant.id': socket.user.id});
+                    if (groupChatParticipant) {
+                      groupChatParticipant.participant.activeConnections++;
+                      groupChatParticipant.save();
+                    } else {
+                      GroupChatParticipant.create({
+                          id: uuidv4(),
+                          chatId: input.chatId,
+                          participant: {
+                            id: socket.user.id,
+                            displayName: socket.user.displayName,
+                            role: socket.user.role,
+                            username: socket.user.username,
+                            activeConnections: 1
+                          },
+                          status: 'V',
+                          createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
+                      });
+                    }
+                  }
                 } else {
                   //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
                   socket.emit("msg-channel", {code: 'JOIN_GROUP_CHAT_FAILED', chatId: input.chatId, msg: 'Group Chat not found'});
@@ -225,7 +234,7 @@ module.exports = {
                 // do nothing
               } else if (!chatInfo && chatType == 'G') {
                 var publicGroupChat = await GroupChat.findOne({id: incomingData.chatId, mode: 'PUBLIC', status: 'V'});
-                if (!publicGroupChat) {
+                if (!publicGroupChat || (socket.user.role !== 'ADMIN' && !publicGroupChat.allowedRoles.includes(socket.user.role))) {
                   return;
                 }
                 cache.getClient().hset(incomingData.chatId, 'id', publicGroupChat.id, 'chatType', 'G', 'groupMode', 'PUBLIC');

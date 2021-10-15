@@ -66,7 +66,7 @@ const verifyToken = async (req, res, next) => {
         return res.status(401).send({status: "error", msg: "User not found"});
       }
     } catch(err) {
-      console.log(err);
+      //console.log(err);
       return res.status(401).send({status: "error", msg: "Invalid Token"});
     }
   } else  {
