@@ -204,6 +204,7 @@ module.exports = {
               if (publicGroupChat) {
                 socket.leave(publicGroupChatId);
                 //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just left the room!', 'server', 'Server');
+                socket.emit("msg-channel", {code: 'LEAVE_GROUP_CHAT_SUCCESS', chatId: input.chatId, msg: 'Left group chat'});
                 io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.displayName + ' just left the room!', senderId: 'server', senderDisplayName: 'Server'});
 
                 // updating group chat participants
@@ -271,7 +272,6 @@ module.exports = {
             });
           }
         });
-
     },
     getSocketIO: () => {
         return io;

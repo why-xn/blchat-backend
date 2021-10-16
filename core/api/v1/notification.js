@@ -18,7 +18,7 @@ module.exports = {
                 status: 'V',
                 createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
             });
-            sio.getSocketIO().to(otherParticipant.id).emit("msg-channel", {id: uid, code: type, targetType: 'PRIVATE_CHAT', targetId: payload.chatId, msg: payload.msg});
+            sio.getSocketIO().to(otherParticipant.id).emit("notification-channel", {id: uid, code: type, targetType: 'PRIVATE_CHAT', targetId: payload.chatId, msg: payload.msg});
         }
     }
 };
