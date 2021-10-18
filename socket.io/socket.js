@@ -126,15 +126,19 @@ module.exports = {
 
         // on new connection
         io.on('connection', (socket) => {
-          if (!socket.user) {
+          if (!socket.user || !socket.user.id) {
             setTimeout(() => {
               socket.disconnect();
             }, 500);
           } else {
-            console.log('User: ' + socket.user.displayName + ' just connected. Socket ID: ' + socket.id);
+            console.log('User: ' + socket.user.displayName + ' (' + socket.user.id + ') just connected. Socket ID: ' + socket.id);
         
             // join self channel
             socket.join(socket.user.id);
+
+            setTimeout(() => {
+              socket.emit("msg-channel", {code: 'WELCOME', chatId: null, msg: 'Welcome to chat'});
+            }, 100);
 
             socket.on("disconnect", (reason) => {
               console.log('Socket disconnected - ', socket.id, ':', reason);
@@ -204,11 +208,11 @@ module.exports = {
               if (publicGroupChat) {
                 socket.leave(publicGroupChatId);
                 //saveChatMessage(publicGroupChatId, 'GROUP', socket.user.displayName + ' just left the room!', 'server', 'Server');
-                socket.emit("msg-channel", {code: 'LEAVE_GROUP_CHAT_SUCCESS', chatId: input.chatId, msg: 'Left group chat'});
+                socket.emit("msg-channel", {code: 'LEAVE_GROUP_CHAT_SUCCESS', chatId: publicGroupChatId, msg: 'Left group chat'});
                 io.to(publicGroupChatId).emit("msg-channel", {code: 'GROUP_CHAT_ANNOUNCEMENT', chatId: publicGroupChatId, msg: socket.user.displayName + ' just left the room!', senderId: 'server', senderDisplayName: 'Server'});
 
                 // updating group chat participants
-                var groupChatParticipant = await GroupChatParticipant.findOne({chatId: input.chatId, 'participant.id': socket.user.id});
+                var groupChatParticipant = await GroupChatParticipant.findOne({chatId: publicGroupChatId, 'participant.id': socket.user.id});
                 if (groupChatParticipant) {
                   groupChatParticipant.participant.activeConnections--;
                   if (groupChatParticipant.participant.activeConnections < 0) {
@@ -225,50 +229,89 @@ module.exports = {
                   
             // on msg from client
             socket.on('msg-channel', async incomingData => {
-              console.log(incomingData);
-              
-              const chatType = getChatType(incomingData.chatId);
+              try {
+                console.log('[DEBUG] NEW_CHAT_MSG:', JSON.stringify(incomingData));
 
-              // checking permission
-              const chatInfo = await cache.hgetall(incomingData.chatId);
-              if (chatInfo && chatType == 'G' && chatInfo.chatType == 'G') {
-                // do nothing
-              } else if (!chatInfo && chatType == 'G') {
-                var publicGroupChat = await GroupChat.findOne({id: incomingData.chatId, mode: 'PUBLIC', status: 'V'});
-                if (!publicGroupChat || (socket.user.role !== 'ADMIN' && !publicGroupChat.allowedRoles.includes(socket.user.role))) {
-                  return;
-                }
-                cache.getClient().hset(incomingData.chatId, 'id', publicGroupChat.id, 'chatType', 'G', 'groupMode', 'PUBLIC');
-                cache.getClient().expire(incomingData.chatId, 600);
-              } else if (chatInfo && chatInfo.chatType != 'G' && chatType != 'G') {
-                if (!chatInfo.participantsInStr.includes(socket.user.id)) {
-                  return
-                }
-              } else if (!chatInfo && chatType != 'G') {
-                var privateChat = await PrivateChat.findOne({id: incomingData.chatId, status: 'V'});
-                if (!privateChat || privateChat.state !== 'APPROVED') {
-                  io.to(socket.id).emit("msg-channel", {code: 'PERMISSION_DENIED', chatId: privateChat.id, msg: 'You reqeust for private chat has not been accepted yet', senderId: 'server', senderDisplayName: 'Server'});
-                  return;
-                }
-                if (!privateChat.participantsInStr.includes(socket.user.id)) {
+                if (!incomingData.chatId || !incomingData.msg) {
                   return;
                 }
                 
-                cache.getClient().hset(privateChat.id, 'id', privateChat.id, 'chatType', chatType, 'participantsInStr', privateChat.participantsInStr);
-                cache.getClient().expire(privateChat.id, 600);
-              }
-        
-              const dateTime = new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
-              const chatMsg = await saveChatMessage(incomingData.chatId, chatType, incomingData.msg, socket.user.id, socket.user.displayName, dateTime);
-              io.to(incomingData.chatId).emit("msg-channel", {
-                code: 'NEW_CHAT_MSG',
-                chatId: incomingData.chatId, 
-                msgId: chatMsg.id,
-                msg: incomingData.msg,
-                senderId: socket.user.id, 
-                senderDisplayName: socket.user.displayName,
-                sentAt: dateTime
-              });
+                const chatType = getChatType(incomingData.chatId);
+
+                var destination = incomingData.chatId;
+
+                // checking permission
+                const chatInfo = await cache.hgetall(incomingData.chatId);
+                if (chatInfo && chatType == 'G' && chatInfo.chatType == 'G') {
+                  // do nothing
+                } else if (!chatInfo && chatType == 'G') {
+                  var publicGroupChat = await GroupChat.findOne({id: incomingData.chatId, mode: 'PUBLIC', status: 'V'});
+                  if (!publicGroupChat || (socket.user.role !== 'ADMIN' && !publicGroupChat.allowedRoles.includes(socket.user.role))) {
+                    return;
+                  }
+                  cache.getClient().hset(incomingData.chatId, 'id', publicGroupChat.id, 'chatType', 'G', 'groupMode', 'PUBLIC');
+                  cache.getClient().expire(incomingData.chatId, 600);
+
+                } else if (chatInfo && chatInfo.chatType != 'G' && chatType != 'G') {
+                  if (!chatInfo.participantsInStr.includes(socket.user.id)) {
+                    return
+                  }
+
+                  console.log('[DEBUG] Cached Chat Info:', chatInfo);
+
+                  destination = chatInfo.p1;
+                  if (destination == socket.user.id) {
+                    destination = chatInfo.p2;
+                  }
+                } else if (!chatInfo && chatType != 'G') {
+                  var privateChat = await PrivateChat.findOne({id: incomingData.chatId, status: 'V'});
+                  if (!privateChat || privateChat.state !== 'APPROVED') {
+                    io.to(socket.id).emit("msg-channel", {code: 'PERMISSION_DENIED', chatId: privateChat.id, msg: 'You reqeust for private chat has not been accepted yet', senderId: 'server', senderDisplayName: 'Server'});
+                    return;
+                  }
+                  if (!privateChat.participantsInStr.includes(socket.user.id)) {
+                    return;
+                  }
+                  
+                  cache.getClient().hset(privateChat.id, 'id', privateChat.id, 'chatType', chatType, 'participantsInStr', privateChat.participantsInStr, 'p1', privateChat.participants[0].id, 'p2', privateChat.participants[1].id);
+                  cache.getClient().expire(privateChat.id, 600);
+
+                  destination = privateChat.participants[0].id;
+                  if (destination == socket.user.id) {
+                    destination = privateChat.participants[1].id;
+                  }
+                }
+          
+                const dateTime = new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
+                const chatMsg = await saveChatMessage(incomingData.chatId, chatType, incomingData.msg, socket.user.id, socket.user.displayName, dateTime);
+                
+                console.log('[DEBUG] destination:', destination);
+
+                io.to(destination).emit("msg-channel", {
+                  code: 'NEW_CHAT_MSG',
+                  chatId: incomingData.chatId, 
+                  msgId: chatMsg.id,
+                  msg: incomingData.msg,
+                  senderId: socket.user.id, 
+                  senderDisplayName: socket.user.displayName,
+                  sentAt: dateTime
+                });
+
+                if (chatType != 'G') {
+                  io.to(socket.user.id).emit("msg-channel", {
+                    code: 'NEW_CHAT_MSG',
+                    chatId: incomingData.chatId, 
+                    msgId: chatMsg.id,
+                    msg: incomingData.msg,
+                    senderId: socket.user.id, 
+                    senderDisplayName: socket.user.displayName,
+                    sentAt: dateTime
+                  });
+                }
+              } catch(err) {
+                console.log('Failed to send message', err);
+                io.to(socket.id).emit("msg-channel", {code: 'FAILED_NEW_CHAT_MSG', chatId: privateChat.id, msg: 'You reqeust for private chat has not been accepted yet', senderId: 'server', senderDisplayName: 'Server'});
+              }              
             });
           }
         });

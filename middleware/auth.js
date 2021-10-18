@@ -7,7 +7,7 @@ const config = process.env;
 
 const verifyToken = async (req, res, next) => {
   var thirdPartyToken = true;
-  const token = req.body.token || req.query.token || req.headers["x-access-token"];
+  var token = req.body.token || req.query.token || req.headers["x-access-token"];
   
   if (!token) {
     token = req.headers["xxx-access-token"];

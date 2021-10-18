@@ -71,6 +71,13 @@ const GroupChatParticipantsSchema = new Schema({
     createDate: Date
 });
 
+GroupChatParticipantsSchema.methods.toJSON = function() {
+    var obj = this.toObject();
+    delete obj.participant._id;
+    delete obj.participant.activeConnections;
+    return obj.participant;
+}
+
 const LastMessageSchema = new Schema({ 
     msg: String,
     sender: String,

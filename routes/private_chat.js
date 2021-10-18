@@ -151,7 +151,7 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
     });
     newPrivateChat.save().then(() => {
       //broadcasting to recipient for the notification
-      notification.create('NOTIFICATION_NEW_PRIVATE_CHAT_REQUEST', {userId: otherParticipant.id, chatId: existingPrivateChat.id, msg: req.user.displayName + ' has sent you a request for private chat'});
+      notification.create('NOTIFICATION_NEW_PRIVATE_CHAT_REQUEST', {userId: otherParticipant.id, chatId: newPrivateChat.id, msg: req.user.displayName + ' has sent you a request for private chat'});
 
       return res.status(200).json({status: 'success', msg: 'Request sent', data: newPrivateChat});
     }).
@@ -186,7 +186,7 @@ router.post('/request/approve/:chatId', auth, async function(req, res, next) {
       }
       
       //broadcasting to recipient for the notification
-      notification.create('NOTIFICATION_PRIVATE_CHAT_REQUEST_APPROVED', {userId: otherParticipant.id, chatId: existingPrivateChat.id, msg: req.user.displayName + ' has accepted your request for private chat'});
+      notification.create('NOTIFICATION_PRIVATE_CHAT_REQUEST_APPROVED', {userId: otherParticipantId, chatId: existingPrivateChat.id, msg: req.user.displayName + ' has accepted your request for private chat'});
       
       return res.status(200).json({status: 'success', msg: 'Request approved', data: existingPrivateChat});
     }).

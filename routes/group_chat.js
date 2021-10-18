@@ -4,7 +4,7 @@ const {
   v4: uuidv4,
 } = require('uuid');
 const auth = require("../middleware/auth");
-var { GroupChat } = require('../db/model/models');
+var { GroupChat, GroupChatParticipant } = require('../db/model/models');
 
 /* GET GroupChat listing. */
 router.get('/public', auth, async (req, res, next) => {
@@ -18,6 +18,23 @@ router.get('/public', auth, async (req, res, next) => {
 });
 
 
+/* GET GroupChat Participants List. */
+router.get('/public/:chatId/participants', auth, async function(req, res, next) {
+  const { role } = req.user;
+  const chatId = req.params.chatId;
+
+  const existingGroupChat = await GroupChat.findOne({ id: chatId, status: 'V' });
+  if (!existingGroupChat) {
+    return res.status(404).json({status: 'error', msg: 'Group chat not found'});
+  } else if (!existingGroupChat.allowedRoles.includes(role)) {
+    return res.status(409).json({status: 'error', msg: 'Permission denied'});
+  }
+
+  const participantList = await GroupChatParticipant.find({ chatId: chatId, status: 'V' }).sort({"participant.displayName": "asc"});
+  return res.status(200).json({status: 'success', data: participantList});
+});
+
+
 /* Create new Public GroupChat */
 router.post('/public', auth, async function(req, res, next) {
   const { role } = req.user;
@@ -26,9 +43,9 @@ router.post('/public', auth, async function(req, res, next) {
   }
   const { name, displayPicture, allowedRoles } = req.body;
 
-  const existingGroupChat = await GroupChat.findOne({ name: name, status: 'V' });
+  const existingGroupChat = await GroupChat.findOne({ name: name, allowedRoles: allowedRoles[0], status: 'V' });
   if (existingGroupChat) {
-    return res.status(409).json({status: 'warning', msg: 'A Public Group Chat already exists with the same name.'})
+    return res.status(400).json({status: 'warning', msg: 'A Public Group Chat already exists with the same name.'})
   }
 
   const newGroup = new GroupChat({
