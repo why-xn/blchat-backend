@@ -10,9 +10,25 @@ var notification = require('../core/api/v1/notification');
 
 
 router.get('/', auth, async function(req, res, next) {
-  const requesterId = req.user.id;
-  const privateChatList = await PrivateChat.find({ "participants.id": requesterId, status: 'V' }).sort({"lastMessage.date": "desc"});
-  return res.status(200).json({status: 'success', data: privateChatList});
+  try {
+    const requesterId = req.user.id;
+    var privateChatType = req.query.type;
+    var privateChatState = req.query.state;
+    var dbQuery = {"participants.id": requesterId, status: 'V'};
+    if (privateChatType != undefined && privateChatType != null && privateChatType.length > 0) {
+      dbQuery.type = privateChatType;
+    }
+    if (privateChatState != undefined && privateChatState != null && privateChatState.length > 0) {
+      dbQuery.state = privateChatState;
+    }
+
+    const privateChatList = await PrivateChat.find(dbQuery).sort({"lastMessage.date": "desc"});
+    return res.status(200).json({status: 'success', data: privateChatList});
+  } catch(err) {
+    console.log(err);
+    return res.status(500).json({status: 'error', msg: 'Internal server error'});
+  }
+  
 });
 
 
@@ -45,13 +61,13 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
   const existingPrivateChat = await PrivateChat.findOne({ status: 'V', $or:[ {'participantsInStr': participantsInStr_1}, {'participantsInStr': participantsInStr_2} ]});
   if (!existingPrivateChat) {
     if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'EXHIBITOR') {
-      return res.status(200).json({status: 'success', msg: 'You can request the user for private chat', data: {type: 'E2E', state: 'NONE', canRequest: true}});
+      return res.status(200).json({status: 'success', msg: 'You can request the user for private chat', data: {type: 'E2E', state: 'NONE', canRequest: true, otherParticipant: otherParticipant}});
     } else if (req.user.role === 'VISITOR' && otherParticipant.role === 'VISITOR') {
-      return res.status(200).json({status: 'success', msg: 'You can request the user for private chat', data: {type: 'V2V', state: 'NONE', canRequest: true}});
+      return res.status(200).json({status: 'success', msg: 'You can request the user for private chat', data: {type: 'V2V', state: 'NONE', canRequest: true, otherParticipant: otherParticipant}});
     } else if (req.user.role === 'EXHIBITOR' && otherParticipant.role === 'VISITOR') {
       return res.status(400).json({status: 'error', msg: 'Exhibitor cannot initiate chat with a Visitor'});
     } else if (req.user.role === 'HELP_DESK' && otherParticipant.role === 'HELP_DESK') {
-      return res.status(200).json({status: 'success', msg: 'Help Desk to Help Desk chat is not allowed', data: {type: 'H2H', state: 'NONE', canRequest: false}});
+      return res.status(200).json({status: 'success', msg: 'Help Desk to Help Desk chat is not allowed', data: {type: 'H2H', state: 'NONE', canRequest: false, otherParticipant: otherParticipant}});
     } else if (req.user.role === 'HELP_DESK' && otherParticipant.role === 'VISITOR') {
       return res.status(400).json({status: 'error', msg: 'Help Desk User cannot initiate chat with a Visitor'});
     } else if (req.user.role === 'HELP_DESK' && otherParticipant.role === 'EXHIBITOR') {

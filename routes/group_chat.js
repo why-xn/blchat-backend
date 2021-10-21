@@ -30,7 +30,7 @@ router.get('/public/:chatId/participants', auth, async function(req, res, next) 
     return res.status(409).json({status: 'error', msg: 'Permission denied'});
   }
 
-  const participantList = await GroupChatParticipant.find({ chatId: chatId, status: 'V' }).sort({"participant.displayName": "asc"});
+  const participantList = await GroupChatParticipant.find({ chatId: chatId, status: 'V', "participant.id": { $ne: req.user.id }, "participant.activeConnections": { $gte: 0} }).sort({"participant.displayName": "asc"}).limit(100);;
   return res.status(200).json({status: 'success', data: participantList});
 });
 

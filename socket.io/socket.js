@@ -16,17 +16,7 @@ function getChatType(chatId) {
 }
 
 async function saveChatMessage (chatId, chatType, msg, senderId, senderDisplayName, createDate) {
-    const newMessage = new ChatMessage({
-      id: uuidv4(),
-      chatId: chatId,
-      //chatType: chatType,
-      msg: msg,
-      senderId: senderId,
-      senderDisplayName: senderDisplayName,
-      status: 'V',
-      createDate: createDate
-    });
-
+  try {
     if(chatType == 'P') {
       const existingPrivateChat = await PrivateChat.findOne({ id: chatId, status: 'V' });
       existingPrivateChat.lastMessage = {
@@ -38,8 +28,21 @@ async function saveChatMessage (chatId, chatType, msg, senderId, senderDisplayNa
       existingPrivateChat.save();
     } 
 
-    await newMessage.save();
+    const newMessage  = await ChatMessage.create({
+      id: uuidv4(),
+      chatId: chatId,
+      //chatType: chatType,
+      msg: msg,
+      senderId: senderId,
+      senderDisplayName: senderDisplayName,
+      status: 'V',
+      createDate: createDate
+    });
     return newMessage;
+  } catch(err) {
+    console.log(err);
+    return null;
+  }
 }
 
 module.exports = {
@@ -282,8 +285,13 @@ module.exports = {
                   }
                 }
           
-                const dateTime = new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
-                const chatMsg = await saveChatMessage(incomingData.chatId, chatType, incomingData.msg, socket.user.id, socket.user.displayName, dateTime);
+                const dateTime = new Date();
+                const chatMsg = await saveChatMessage(incomingData.chatId, chatType, incomingData.msg, socket.user.id, socket.user.displayName, dateTime.toISOString());
+
+                if (chatMsg == null) {
+                  io.to(socket.id).emit("msg-channel", {code: 'FAILED_NEW_CHAT_MSG', chatId: privateChat.id, msg: 'Error occurred sending msg.', senderId: 'server', senderDisplayName: 'Server'});
+                  return;
+                }
                 
                 console.log('[DEBUG] destination:', destination);
 
@@ -294,7 +302,7 @@ module.exports = {
                   msg: incomingData.msg,
                   senderId: socket.user.id, 
                   senderDisplayName: socket.user.displayName,
-                  sentAt: dateTime
+                  sentAt: dateTime.toISOString()
                 });
 
                 if (chatType != 'G') {
@@ -305,7 +313,7 @@ module.exports = {
                     msg: incomingData.msg,
                     senderId: socket.user.id, 
                     senderDisplayName: socket.user.displayName,
-                    sentAt: dateTime
+                    sentAt: dateTime.toISOString()
                   });
                 }
               } catch(err) {
