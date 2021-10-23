@@ -54,6 +54,9 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
   }
 
   var otherParticipant = await User.findOne({id: otherParticipantId, status: 'V'});
+  if (!otherParticipant) {
+    return res.status(400).json({status: 'error', msg: 'Targent user not found'});
+  }
 
   const participantsInStr_1 = requesterId + ',' + otherParticipantId;
   const participantsInStr_2 = otherParticipantId + ',' + requesterId;
