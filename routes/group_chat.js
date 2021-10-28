@@ -4,7 +4,7 @@ const {
   v4: uuidv4,
 } = require('uuid');
 const auth = require("../middleware/auth");
-var { GroupChat, GroupChatParticipant } = require('../db/model/models');
+var { GroupChat, GroupChatParticipant, PrivateChat } = require('../db/model/models');
 
 /* GET GroupChat listing. */
 router.get('/public', auth, async (req, res, next) => {
@@ -31,7 +31,30 @@ router.get('/public/:chatId/participants', auth, async function(req, res, next) 
   }
 
   const participantList = await GroupChatParticipant.find({ chatId: chatId, status: 'V', "participant.id": { $ne: req.user.id }, "participant.activeConnections": { $gte: 0} }).sort({"participant.displayName": "asc"}).limit(100);;
-  return res.status(200).json({status: 'success', data: participantList});
+  
+  // filtering out my friends out of group chat participants list
+  const privateChatList = await PrivateChat.find({status: 'V', "participants.id": req.user.id, type: "V2V", state: "APPROVED"}).sort({"lastMessage.date": "desc"});
+  let friendList = [];
+  privateChatList.forEach((pc) => {
+    if (pc.participants[0].id === req.user.id) {
+      friendList[pc.participants[1].id] = 1;
+    } else {
+      friendList[pc.participants[0].id] = 1;
+    }
+  });
+
+  let filterredParticipantList = [];
+  for (let i = 0; i < participantList.length; i++) {
+    try {
+      if (friendList[participantList[i].participant.id] !== 1) {
+        filterredParticipantList.push(participantList[i]);
+      }
+    } catch(err) {
+      console.log(err);
+      continue;
+    }
+  }
+  return res.status(200).json({status: 'success', data: filterredParticipantList});
 });
 
 
