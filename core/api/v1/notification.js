@@ -6,7 +6,7 @@ const {
 
 module.exports = {
     create: async function (type, payload) {
-        if (type === 'NOTIFICATION_NEW_PRIVATE_CHAT_REQUEST' || type === 'NOTIFICATION_PRIVATE_CHAT_REQUEST_APPROVED') {
+        if (type === 'NOTIFICATION_NEW_PRIVATE_CHAT_REQUEST' || type === 'NOTIFICATION_PRIVATE_CHAT_REQUEST_APPROVED' || type === 'NOTIFICATION_PRIVATE_CHAT_REQUEST_REJECTED' || type === 'NOTIFICATION_PRIVATE_CHAT_BLOCKED') {
             const uid = uuidv4();
             Notification.create({
                 id: uid,

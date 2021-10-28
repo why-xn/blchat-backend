@@ -32,6 +32,19 @@ router.get('/', auth, async function(req, res, next) {
 });
 
 
+router.get('/requests', auth, async function(req, res, next) {
+  try {
+    const requesterId = req.user.id;
+    var dbQuery = {"participants.id": requesterId, state: 'REQUESTED', requestedBy: { $ne: requesterId }, status: 'V'};
+    const privateChatList = await PrivateChat.find(dbQuery).sort({"createDate": "desc"}).limit(100);
+    return res.status(200).json({status: 'success', data: privateChatList});
+  } catch(err) {
+    console.log(err);
+    return res.status(500).json({status: 'error', msg: 'Internal server error'});
+  }
+});
+
+
 router.get('/:chatId', auth, async function(req, res, next) {
   const requesterId = req.user.id;
   const chatId = req.params.chatId;
@@ -145,6 +158,18 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
     return res.status(200).json({status: 'success', msg: 'Request already approved', data: existingPrivateChat});
   } else if(existingPrivateChat && existingPrivateChat.state === 'REQUESTED') {
     return res.status(200).json({status: 'success', msg: 'Already requested', data: existingPrivateChat});
+  } else if(existingPrivateChat && existingPrivateChat.state === 'REJECTED') {
+    existingPrivateChat.state = 'REQUESTED';
+    existingPrivateChat.requestedBy = requesterId;
+    existingPrivateChat.save().then(() => {
+      //broadcasting to recipient for the notification
+      notification.create('NOTIFICATION_NEW_PRIVATE_CHAT_REQUEST', {userId: otherParticipant.id, chatId: existingPrivateChat.id, msg: req.user.displayName + ' has sent you a request for private chat'});
+      return res.status(200).json({status: 'success', msg: 'Request sent', data: existingPrivateChat});
+    }).
+    catch(error => {
+      console.log(error);
+      return res.status(500).json({status: 'error', msg: 'Error occurred while creating private chat request'});
+    });
   } else {
     const newPrivateChat = new PrivateChat({
       id: 'pc-' + uuidv4(),
@@ -213,6 +238,95 @@ router.post('/request/approve/:chatId', auth, async function(req, res, next) {
       console.log(error);
       return res.status(500).json({status: 'error', msg: 'Error occurred while accepting private chat request'});
     });
+  }
+});
+
+router.post('/request/reject/:chatId', auth, async function(req, res, next) {
+  const requesterId = req.user.id;
+  const chatId = req.params.chatId;
+
+  const existingPrivateChat = await PrivateChat.findOne({id: chatId, status: 'V'});
+  if (!existingPrivateChat) {
+    return res.status(400).json({status: 'error', msg: 'Private chat not found'});
+  } else if (existingPrivateChat.participants[0].id !== requesterId && existingPrivateChat.participants[1].id !== requesterId) {
+    return res.status(400).json({status: 'error', msg: 'Permission denied'});
+  }
+
+  if (existingPrivateChat && existingPrivateChat.state !== 'REQUESTED') {
+    return res.status(200).json({status: 'success', msg: 'Cannot reject. Invalid current state. ' + existingPrivateChat.state, data: existingPrivateChat});
+  } else {
+    existingPrivateChat.state = 'REJECTED';
+    existingPrivateChat.save().then(() => {
+      var otherParticipantId = existingPrivateChat.participants[0].id;
+      if (otherParticipantId == requesterId) {
+        otherParticipantId = existingPrivateChat.participants[1].id;
+      }
+      
+      //broadcasting to recipient for the notification
+      notification.create('NOTIFICATION_PRIVATE_CHAT_REQUEST_REJECTED', {userId: otherParticipantId, chatId: existingPrivateChat.id, msg: req.user.displayName + ' has rejected your request for private chat'});
+      
+      return res.status(200).json({status: 'success', msg: 'Request rejected', data: existingPrivateChat});
+    }).
+    catch(error => {
+      console.log(error);
+      return res.status(500).json({status: 'error', msg: 'Error occurred while rejecting private chat request'});
+    });
+  }
+});
+
+router.post('/block/:chatId', auth, async function(req, res, next) {
+  const requesterId = req.user.id;
+  const chatId = req.params.chatId;
+
+  const existingPrivateChat = await PrivateChat.findOne({id: chatId, status: 'V'});
+  if (!existingPrivateChat) {
+    return res.status(400).json({status: 'error', msg: 'Private chat not found'});
+  } else if (existingPrivateChat.participants[0].id !== requesterId && existingPrivateChat.participants[1].id !== requesterId) {
+    return res.status(400).json({status: 'error', msg: 'Permission denied'});
+  }
+
+  if (existingPrivateChat && existingPrivateChat.state === 'BLOCKED') {
+    return res.status(200).json({status: 'success', msg: 'Already blocked', data: existingPrivateChat});
+  } else {
+    existingPrivateChat.state = 'BLOCKED';
+    existingPrivateChat.save().then(() => {
+      var otherParticipantId = existingPrivateChat.participants[0].id;
+      if (otherParticipantId == requesterId) {
+        otherParticipantId = existingPrivateChat.participants[1].id;
+      }
+      
+      //broadcasting to recipient for the notification
+      notification.create('NOTIFICATION_PRIVATE_CHAT_BLOCKED', {userId: otherParticipantId, chatId: existingPrivateChat.id, msg: req.user.displayName + ' has blocked you from private chat'});
+      
+      return res.status(200).json({status: 'success', msg: 'User blocked for Private Chat', data: existingPrivateChat});
+    }).
+    catch(error => {
+      console.log(error);
+      return res.status(500).json({status: 'error', msg: 'Error occurred while accepting private chat request'});
+    });
+  }
+});
+
+
+router.delete('/:id', auth, async function(req, res, next) {
+  const { role } = req.user;
+  if (role !== 'ADMIN') {
+    return res.status(403).json({status: 'error', msg: 'Permission Denied'});
+  }
+  const privateChatId = req.params.id;
+
+  const privateChat = await PrivateChat.findOne({ id: privateChatId, status: 'V' });
+  if (privateChat) {
+    privateChat.status = 'D';
+    privateChat.save().then(() => {
+      return res.status(200).json({status: 'success', msg: 'Private Chat Deleted'});
+    }).
+    catch(error => {
+      console.log(error);
+      return res.status(500).json({status: 'error', msg: 'Error occurred while deleting Private Chat'});
+    });
+  } else {
+    return res.status(400).json({status: 'error', msg: 'Not found'});
   }
 });
 

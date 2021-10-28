@@ -269,7 +269,11 @@ module.exports = {
                 } else if (!chatInfo && chatType != 'G') {
                   var privateChat = await PrivateChat.findOne({id: incomingData.chatId, status: 'V'});
                   if (!privateChat || privateChat.state !== 'APPROVED') {
-                    io.to(socket.id).emit("msg-channel", {code: 'PERMISSION_DENIED', chatId: privateChat.id, msg: 'You reqeust for private chat has not been accepted yet', senderId: 'server', senderDisplayName: 'Server'});
+                    if (privateChat.state === 'BLOCKED') {
+                      io.to(socket.id).emit("msg-channel", {code: 'PERMISSION_DENIED', chatId: privateChat.id, msg: 'You cannot reply to this conversation anymore', senderId: 'server', senderDisplayName: 'Server'});
+                    } else {
+                      io.to(socket.id).emit("msg-channel", {code: 'PERMISSION_DENIED', chatId: privateChat.id, msg: 'You reqeust for private chat has not been accepted yet', senderId: 'server', senderDisplayName: 'Server'});
+                    }
                     return;
                   }
                   if (!privateChat.participantsInStr.includes(socket.user.id)) {
