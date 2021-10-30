@@ -33,10 +33,17 @@ router.get('/:chatId', auth, async (req, res, next) => {
         if (privateChat.participants[0].id != req.user.id && privateChat.participants[1].id != req.user.id) {
           return res.status(400).json({status: 'error', msg: 'Permission Denied'});
         }
+
+        if (privateChat.lastMessage != null && privateChat.lastMessage.sender !== req.user.id && !privateChat.lastMessage.seenByRecipient) {
+          privateChat.lastMessage.seenByRecipient = true;
+          privateChat.save();
+        }
+
       }
   }
 
-  var chatMessages = await ChatMessage.find({chatId: chatId, status: 'V'}).sort({createDate: 'asc'}).limit(100);
+  var chatMessages = await ChatMessage.find({chatId: chatId, status: 'V'}).sort({ _id: -1 }).limit(100);
+  chatMessages = chatMessages.reverse();
   return res.status(200).json({status: 'success', data: chatMessages});
 });
 

@@ -33,7 +33,7 @@ router.get('/public/:chatId/participants', auth, async function(req, res, next) 
   const participantList = await GroupChatParticipant.find({ chatId: chatId, status: 'V', "participant.id": { $ne: req.user.id }, "participant.activeConnections": { $gte: 0} }).sort({"participant.displayName": "asc"}).limit(100);;
   
   // filtering out my friends out of group chat participants list
-  const privateChatList = await PrivateChat.find({status: 'V', "participants.id": req.user.id, type: "V2V", state: "APPROVED"}).sort({"lastMessage.date": "desc"});
+  const privateChatList = await PrivateChat.find({status: 'V', "participants.id": req.user.id, type: "V2V", state: { $ne: "REJECTED" }}).sort({"lastMessage.date": "desc"});
   let friendList = [];
   privateChatList.forEach((pc) => {
     if (pc.participants[0].id === req.user.id) {

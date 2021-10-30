@@ -16,7 +16,7 @@ module.exports = {
                 targetId: payload.chatId,
                 clicked: false,
                 status: 'V',
-                createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
+                createDate: new Date().toISOString()
             });
             sio.getSocketIO().to(payload.userId).emit("notification-channel", {id: uid, code: type, targetType: 'PRIVATE_CHAT', targetId: payload.chatId, msg: payload.msg});
         }

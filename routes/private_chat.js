@@ -52,6 +52,9 @@ router.get('/:chatId', auth, async function(req, res, next) {
   if (!existingPrivateChat.participantsInStr.includes(requesterId)) {
     return res.status(400).json({status: 'error', msg: 'Permission Denied'});
   }
+  if (existingPrivateChat.state === 'REJECTED') {
+    existingPrivateChat['canRequest'] = true;
+  }
   return res.status(200).json({status: 'success', data: existingPrivateChat});
 
 });
@@ -115,8 +118,13 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
       requesterBy: requesterId,
       type: privateChatType,
       state: 'APPROVED',
+      lastMessage: {
+        sender: requesterId,
+        date: new Date().toISOString(),
+        seenByRecipient: false
+      },
       status: 'V',
-      createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}),
+      createDate: new Date().toISOString(),
       createdBy: requesterId
     });
     newPrivateChat.save().then(() => {
@@ -127,6 +135,9 @@ router.get('/with/:otherParticipantId', auth, async function(req, res, next) {
       return res.status(500).json({status: 'error', msg: 'Error occurred while creating Private Chat'});
     });
   } else {
+    if (existingPrivateChat.state === 'REJECTED') {
+      existingPrivateChat['canRequest'] = true;
+    }
     return res.status(200).json({status: 'success', data: existingPrivateChat});
   }
 });
@@ -189,8 +200,13 @@ router.post('/request/:otherParticipantId', auth, async function(req, res, next)
       requestedBy: requesterId,
       type: privateChatType,
       state: 'REQUESTED',
+      lastMessage: {
+        sender: requesterId,
+        date: new Date().toISOString(),
+        seenByRecipient: false
+      },
       status: 'V',
-      createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}),
+      createDate: new Date().toISOString(),
       createdBy: requesterId
     });
     newPrivateChat.save().then(() => {
