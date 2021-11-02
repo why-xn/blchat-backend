@@ -73,6 +73,7 @@ module.exports = {
             var user = await cache.hgetall(token);
             if (user && user.id) {
               socket.user = user;
+              console.log("[DEBUG] On Socket Connect: User Found in Cache.", user.displayName);
               return next();
             }
       
@@ -93,6 +94,7 @@ module.exports = {
                 username: response.data.data.username,
                 role: response.data.data.role != null ? response.data.data.role.toUpperCase() : 'VISITOR',
               }
+              console.log("[DEBUG] On Socket Connect: User validation from third party.", response.data.data.displayName);
               socket.user = user;
       
               cache.getClient().hset(token, 'id', user.id, 'displayName', user.displayName, 'displayPicture', user.displayPicture, 'username', user.username, 'role', user.role);
@@ -110,6 +112,50 @@ module.exports = {
                   status: 'V',
                   createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
                 }); 
+              } else if(oldUser && user.displayName !== oldUser.displayName) {
+                console.log("[DEBUG] Updating user displayname in User Model.", oldUser.displayName, "-->", user.displayName);
+                oldUser.displayName = user.displayName;
+                oldUser.save();
+
+                try {
+                  console.log("[DEBUG] Updating user displayname in Private Chat Model.", oldUser.displayName, "-->", user.displayName);
+                  let privateChatList = await PrivateChat.find({"participants.id": user.id, status: 'V'});
+                  for (let i = 0; i < privateChatList.length; i++) {
+                    for (let j = 0; j < privateChatList[i].participants.length; j++) {
+                      if (privateChatList[i].participants[j].id == user.id) {
+                        privateChatList[i].participants[j].displayName = user.displayName;
+                        break;
+                      }
+                    }
+                    privateChatList[i].save();
+                  }
+                } catch(err) {
+                  console.log('[DEBUG] Error while updating user displayname in Private Chat Model.', err);
+                }
+                
+                try {
+                  console.log("[DEBUG] Updating user displayname in Group Chat Participants Model.", oldUser.displayName, "-->", user.displayName);
+                  let groupChatParticipantList = await GroupChatParticipant.find({"participant.id": user.id, status: 'V'});
+                  for (let i = 0; i < groupChatParticipantList.length; i++) {
+                    if (groupChatParticipantList[i].participant.id == user.id) {
+                      groupChatParticipantList[i].participant.displayName = user.displayName;
+                      groupChatParticipantList[i].save();
+                    }
+                  }
+                } catch(err) {
+                  console.log('[DEBUG] Error while updating user displayname in Group Chat Participants Model.', err);
+                }
+
+                try {
+                  console.log("[DEBUG] Updating user displayname in Chat Messages Model.", oldUser.displayName, "-->", user.displayName);
+                  let chatMessages = await ChatMessage.find({senderId: user.id, status: 'V'});
+                  for (let i = 0; i < chatMessages.length; i++) {
+                    chatMessages[i].senderDisplayName = user.displayName;
+                    chatMessages[i].save();
+                  }
+                } catch(err) {
+                  console.log('[DEBUG] Error while updating user displayname in Chat Messages Model.', err);
+                }
               }
               return next();
 

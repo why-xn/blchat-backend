@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const axios = require('axios');
 var cache = require("../cache/redis");
-var { User } = require('../db/model/models');
+var { User, PrivateChat, GroupChatParticipant, ChatMessage } = require('../db/model/models');
 
 const config = process.env;
 
@@ -61,6 +61,50 @@ const verifyToken = async (req, res, next) => {
             status: 'V',
             createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
           }); 
+        } else if(oldUser && user.displayName !== oldUser.displayName) {
+          console.log("[DEBUG] Updating user displayname in User Model.", oldUser.displayName, "-->", user.displayName);
+          oldUser.displayName = user.displayName;
+          oldUser.save();
+
+          try {
+            console.log("[DEBUG] Updating user displayname in Private Chat Model.", oldUser.displayName, "-->", user.displayName);
+            let privateChatList = await PrivateChat.find({"participants.id": user.id, status: 'V'});
+            for (let i = 0; i < privateChatList.length; i++) {
+              for (let j = 0; j < privateChatList[i].participants.length; j++) {
+                if (privateChatList[i].participants[j].id == user.id) {
+                  privateChatList[i].participants[j].displayName = user.displayName;
+                  break;
+                }
+              }
+              privateChatList[i].save();
+            }
+          } catch(err) {
+            console.log('[DEBUG] Error while updating user displayname in Private Chat Model.', err);
+          }
+          
+          try {
+            console.log("[DEBUG] Updating user displayname in Group Chat Participants Model.", oldUser.displayName, "-->", user.displayName);
+            let groupChatParticipantList = await GroupChatParticipant.find({"participant.id": user.id, status: 'V'});
+            for (let i = 0; i < groupChatParticipantList.length; i++) {
+              if (groupChatParticipantList[i].participant.id == user.id) {
+                groupChatParticipantList[i].participant.displayName = user.displayName;
+                groupChatParticipantList[i].save();
+              }
+            }
+          } catch(err) {
+            console.log('[DEBUG] Error while updating user displayname in Group Chat Participants Model.', err);
+          }
+
+          try {
+            console.log("[DEBUG] Updating user displayname in Chat Messages Model.", oldUser.displayName, "-->", user.displayName);
+            let chatMessages = await ChatMessage.find({senderId: user.id, status: 'V', chatType: 'G'});
+            for (let i = 0; i < chatMessages.length; i++) {
+              chatMessages[i].senderDisplayName = user.displayName;
+              chatMessages[i].save();
+            }
+          } catch(err) {
+            console.log('[DEBUG] Error while updating user displayname in Chat Messages Model.', err);
+          }
         }
       } else {
         return res.status(401).send({status: "error", msg: "User not found"});

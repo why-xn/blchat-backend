@@ -24,8 +24,9 @@ UserSchema.methods.toJSON = function() {
 const NotificationSchema = new Schema({
     id: String,
     userId: String,
+    code: String,
     msg: String,
-    targetPage: String,
+    targetType: String,
     targetId: String,
     clicked: Boolean,
     status: String, // V (VALID), D (DELETED)

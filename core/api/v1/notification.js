@@ -11,8 +11,9 @@ module.exports = {
             Notification.create({
                 id: uid,
                 userId: payload.userId,
+                code: type,
                 msg: payload.msg,
-                targetPage: 'PRIVATE_CHAT',
+                targetType: 'PRIVATE_CHAT',
                 targetId: payload.chatId,
                 clicked: false,
                 status: 'V',
