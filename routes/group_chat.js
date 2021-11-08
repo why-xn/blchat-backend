@@ -33,7 +33,7 @@ router.get('/public/:chatId/participants', auth, async function(req, res, next) 
   let query = { chatId: chatId, status: 'V', "participant.id": { $ne: req.user.id }, "participant.activeConnections": { $gte: 0} };
 
   let searchText = req.query.search;
-  if (searchText && searchText.length >= 2) {
+  if (searchText && searchText.length >= 3) {
     query["participant.displayName"] = { "$regex": searchText, "$options": "i" };
   }
   const participantList = await GroupChatParticipant.find(query).sort({"participant.displayName": "asc"}).limit(100);;
