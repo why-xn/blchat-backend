@@ -3,7 +3,7 @@ require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const axios = require('axios');
 var cache = require("../cache/redis");
-var { GroupChat, PrivateChat, ChatMessage, User, GroupChatParticipant } = require('../db/model/models');
+var { GroupChat, PrivateChat, ChatMessage, User, GroupChatParticipant, GroupChatActiveUserSocket } = require('../db/model/models');
 const { 
     v4: uuidv4,
   } = require('uuid');
@@ -42,6 +42,47 @@ async function saveChatMessage (chatId, chatType, msg, senderId, senderDisplayNa
   } catch(err) {
     console.log(err);
     return null;
+  }
+}
+
+async function saveGroupChatActiveUserSocket (chatId, userId, socketId) {
+  try {
+    await GroupChatActiveUserSocket.create({
+      id: uuidv4(),
+      chatId: chatId,
+      userId: userId,
+      socketId: socketId,
+      status: 'V',
+      createDate: new Date().toISOString()
+    });
+  } catch(err) {
+    console.log('Error occurred while saving Group Chat Active User Socket', err);
+  }
+}
+
+async function getGroupChatActiveUserSocket(chatId, socketId) {
+  try {
+    const groupChatActiveUserSocket = await GroupChatActiveUserSocket.findOne({ chatId: chatId, socketId: socketId, status: 'V'});
+    return groupChatActiveUserSocket
+  } catch(err) {
+    console.log('Error occurred while getting Group Chat Active User Socket.', err);
+    return null;
+  }
+}
+
+async function deleteGroupChatActiveUserSocket(chatId, socketId) {
+  try {
+    await GroupChatActiveUserSocket.deleteOne({ chatId: chatId, socketId: socketId, status: 'V'});
+  } catch(err) {
+    console.log('Error occurred while deleting Group Chat Active User Socket.', socketId, err);
+  }
+}
+
+async function deleteAllGroupChatActiveUserSocketBySocket(socketId) {
+  try {
+    await GroupChatActiveUserSocket.deleteMany({ socketId: socketId, status: 'V'});
+  } catch(err) {
+    console.log('Error occurred while deleting all Group Chat Active User Socket by Socket.', socketId, err);
   }
 }
 
@@ -113,7 +154,8 @@ module.exports = {
                   createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
                 }); 
               } else if(oldUser && user.displayName !== oldUser.displayName) {
-                console.log("[DEBUG] Updating user displayname in User Model.", oldUser.displayName, "-->", user.displayName);
+                const oldDisplayName = oldUser.displayName;
+                console.log("[DEBUG] Updating user displayname in User Model.", oldDisplayName, "-->", user.displayName);
                 oldUser.displayName = user.displayName;
                 oldUser.save();
 
@@ -181,7 +223,7 @@ module.exports = {
             }, 500);
           } else {
             console.log('User: ' + socket.user.displayName + ' (' + socket.user.id + ') just connected. Socket ID: ' + socket.id);
-        
+
             // join self channel
             socket.join(socket.user.id);
 
@@ -189,10 +231,22 @@ module.exports = {
               socket.emit("msg-channel", {code: 'WELCOME', chatId: null, msg: 'Welcome to chat'});
             }, 100);
 
-            socket.on("disconnect", (reason) => {
+            socket.on("disconnect", async (reason) => {
               console.log('Socket disconnected - ', socket.id, ':', reason);
               if (socket.user) {
                   socket.leave(socket.user.id);
+              }
+              
+              deleteAllGroupChatActiveUserSocketBySocket(socket.id);
+              
+              // updating group chat participants
+              var groupChatParticipantList = await GroupChatParticipant.find({'participant.id': socket.user.id, status: 'V'});
+              for (let i = 0; i < groupChatParticipantList.length; i++) {
+                groupChatParticipantList[i].participant.activeConnections--;
+                if (groupChatParticipantList[i].participant.activeConnections < 0) {
+                  groupChatParticipantList[i].participant.activeConnections = 0;
+                }
+                groupChatParticipantList[i].save();
               }
             });
             
@@ -235,6 +289,12 @@ module.exports = {
                           createDate: new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"})
                       });
                     }
+
+                    const groupChatActiveUserSocket = getGroupChatActiveUserSocket(input.chatId, socket.id);
+                    if (!groupChatActiveUserSocket) {
+                      saveGroupChatActiveUserSocket(input.chatId, socket.user.id, socket.id);
+                    }
+
                   }
                 } else {
                   //socket.broadcast.to(socket.id).emit( "msg-channel", {type: 'JOIN_GROUP_CHAT_FAILED', data: publicGroupChat, msg: 'Group Chat not found'} );
@@ -268,6 +328,11 @@ module.exports = {
                     groupChatParticipant.participant.activeConnections = 0;
                   }
                   groupChatParticipant.save();
+                }
+
+                const groupChatActiveUserSocket = getGroupChatActiveUserSocket(publicGroupChatId, socket.id);
+                if (groupChatActiveUserSocket) {
+                  deleteGroupChatActiveUserSocket(publicGroupChatId, socket.id);
                 }
 
               } else {

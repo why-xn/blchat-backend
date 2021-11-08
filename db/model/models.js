@@ -60,7 +60,6 @@ const GroupChatParticipantSchema = new Schema({
 GroupChatParticipantSchema.methods.toJSON = function() {
     var obj = this.toObject();
     delete obj._id;
-    delete obj.activeConnections;
     return obj;
 }
 
@@ -75,7 +74,6 @@ const GroupChatParticipantsSchema = new Schema({
 GroupChatParticipantsSchema.methods.toJSON = function() {
     var obj = this.toObject();
     delete obj.participant._id;
-    delete obj.participant.activeConnections;
     return obj.participant;
 }
 
@@ -141,6 +139,15 @@ ChatMessageSchema.methods.toJSON = function() {
     return obj;
 }
 
+const GroupChatActiveUserSocketSchema = new Schema({
+    id: String,
+    userId: String,
+    socketId: String,
+    groupChatId: String,
+    status: String, // V (VALID), D (DELETED)
+    createDate: Date
+});
+
 
 module.exports = {
     User: mongoose.model('User', UserSchema),
@@ -148,5 +155,6 @@ module.exports = {
     GroupChatParticipant: mongoose.model('GroupChatParticipant', GroupChatParticipantsSchema),
     PrivateChat: mongoose.model('PrivateChat', PrivateChatSchema),
     ChatMessage: mongoose.model('ChatMessage', ChatMessageSchema),
-    Notification: mongoose.model('Notification', NotificationSchema)
+    Notification: mongoose.model('Notification', NotificationSchema),
+    GroupChatActiveUserSocket: mongoose.model('GroupChatActiveUserSocket', GroupChatActiveUserSocketSchema)
 }

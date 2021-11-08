@@ -30,7 +30,13 @@ router.get('/public/:chatId/participants', auth, async function(req, res, next) 
     return res.status(409).json({status: 'error', msg: 'Permission denied'});
   }
 
-  const participantList = await GroupChatParticipant.find({ chatId: chatId, status: 'V', "participant.id": { $ne: req.user.id }, "participant.activeConnections": { $gte: 0} }).sort({"participant.displayName": "asc"}).limit(100);;
+  let query = { chatId: chatId, status: 'V', "participant.id": { $ne: req.user.id }, "participant.activeConnections": { $gte: 0} };
+
+  let searchText = req.query.search;
+  if (searchText && searchText.length >= 2) {
+    query["participant.displayName"] = { "$regex": searchText, "$options": "i" };
+  }
+  const participantList = await GroupChatParticipant.find(query).sort({"participant.displayName": "asc"}).limit(100);;
   
   // filtering out my friends out of group chat participants list
   const privateChatList = await PrivateChat.find({status: 'V', "participants.id": req.user.id, type: "V2V", state: { $ne: "REJECTED" }}).sort({"lastMessage.date": "desc"});
