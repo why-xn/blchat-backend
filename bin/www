@@ -11,7 +11,7 @@ var db = require('../db/adapter/mongo');
 var cache = require("../cache/redis");
 var cors = require('cors');
 var bcrypt = require('bcryptjs');
-var { User, GroupChatParticipant } = require('../db/model/models');
+var { User, GroupChatParticipant, GroupChatActiveUserSocket } = require('../db/model/models');
 const { 
   v4: uuidv4,
 } = require('uuid');
@@ -59,10 +59,19 @@ async function createInitAdminUser() {
   }
 }
 
+async function clearAllGroupChatActiveUserSockets() {
+  try {
+    console.log('[INFO] Clearing all Group Chat Active User Sockets');
+    await GroupChatActiveUserSocket.remove();
+  } catch(err) {
+    console.log('Error occurred while clearing all group chat active user sockets.', err);
+  }
+}
+
 async function clearAllGroupParticipants() {
   try {
     console.log('[INFO] Clearing all Group Chat Participants');
-    await GroupChatParticipant.deleteMany();
+    await GroupChatParticipant.updateMany({}, { $set: { "participant.activeConnections": 0 }});
   } catch(err) {
     console.log('Error occurred while clearing all group participants.', err);
   }
@@ -86,6 +95,7 @@ server.listen(port, async () => {
   db.initConnection();
   cache.initConnection();
   createInitAdminUser();
+  clearAllGroupChatActiveUserSockets();
   clearAllGroupParticipants();
   resetAllUserActiveConnections();
 });

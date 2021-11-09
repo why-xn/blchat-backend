@@ -60,6 +60,16 @@ async function saveGroupChatActiveUserSocket (chatId, userId, socketId) {
   }
 }
 
+async function getAllGroupChatActiveUserSocketBySocketId(socketId) {
+  try {
+    const groupChatActiveUserSocketList = await GroupChatActiveUserSocket.find({ socketId: socketId, status: 'V'});
+    return groupChatActiveUserSocketList
+  } catch(err) {
+    console.log('Error occurred while getting All Group Chat Active User Socket by Socket ID.', err);
+    return null;
+  }
+}
+
 async function getGroupChatActiveUserSocket(chatId, socketId) {
   try {
     const groupChatActiveUserSocket = await GroupChatActiveUserSocket.findOne({ chatId: chatId, socketId: socketId, status: 'V'});
@@ -237,23 +247,33 @@ module.exports = {
                   socket.leave(socket.user.id);
               }
               
-              deleteAllGroupChatActiveUserSocketBySocket(socket.id);
-              
-              // updating group chat participants
-              var groupChatParticipantList = await GroupChatParticipant.find({'participant.id': socket.user.id, status: 'V'});
-              for (let i = 0; i < groupChatParticipantList.length; i++) {
-                groupChatParticipantList[i].participant.activeConnections--;
-                if (groupChatParticipantList[i].participant.activeConnections < 0) {
-                  groupChatParticipantList[i].participant.activeConnections = 0;
+              const groupChatActiveUserSocketList = await getAllGroupChatActiveUserSocketBySocketId(socket.id);
+              if (groupChatActiveUserSocketList !== null && groupChatActiveUserSocketList !== undefined) {
+                //console.log("[DEBUG] Total Active Count in Group Chats by Socket", socket.id, "is", groupChatActiveUserSocketList.length);
+                for (let i = 0; i < groupChatActiveUserSocketList.length; i++) {
+                  // updating group chat participants
+                  var groupChatParticipant = await GroupChatParticipant.findOne({"participant.id": socket.user.id, chatId: groupChatActiveUserSocketList[i].chatId, status: 'V'});
+                  if (groupChatParticipant) {
+                    groupChatParticipant.participant.activeConnections--;
+                    if (groupChatParticipant.participant.activeConnections < 0) {
+                      groupChatParticipant.participant.activeConnections = 0;
+                    }
+                    groupChatParticipant.save();
+                  } else {
+                    var groupChatParticipantList = await GroupChatParticipant.find({"participant.id": socket.user.id, status: 'V'});
+                    console.log(groupChatParticipantList);
+                  }
                 }
-                groupChatParticipantList[i].save();
+                deleteAllGroupChatActiveUserSocketBySocket(socket.id);
+              } else {
+                //console.log("[DEBUG] Total Active Count in Group Chats by Socket", socket.id, "is n/a");
               }
             });
             
             // join public group chat
             socket.on('join', async function (input) {
               console.log('[DEBUG] request to join public group. ', socket.user.id, input.chatId);
-              console.log('[DEBUG] Input: ', JSON.stringify(input));
+              //console.log('[DEBUG] Input: ', JSON.stringify(input));
               if (!input || !input.chatId) {
                 return;
               }
@@ -290,8 +310,9 @@ module.exports = {
                       });
                     }
 
-                    const groupChatActiveUserSocket = getGroupChatActiveUserSocket(input.chatId, socket.id);
+                    const groupChatActiveUserSocket = await getGroupChatActiveUserSocket(input.chatId, socket.id);
                     if (!groupChatActiveUserSocket) {
+                      //console.log("[DEBUG] Adding socket to Active List in Group Chat.", socket.id);
                       saveGroupChatActiveUserSocket(input.chatId, socket.user.id, socket.id);
                     }
 
@@ -344,7 +365,7 @@ module.exports = {
             // on msg from client
             socket.on('msg-channel', async incomingData => {
               try {
-                console.log('[DEBUG] NEW_CHAT_MSG:', JSON.stringify(incomingData));
+                console.log('[DEBUG] NEW_CHAT_MSG from', socket.id, socket.user.id);
 
                 if (!incomingData.chatId || !incomingData.msg) {
                   return;
@@ -371,7 +392,7 @@ module.exports = {
                     return
                   }
 
-                  console.log('[DEBUG] Cached Chat Info:', chatInfo);
+                  //console.log('[DEBUG] Cached Chat Info:', chatInfo);
 
                   destination = chatInfo.p1;
                   if (destination == socket.user.id) {
@@ -408,7 +429,7 @@ module.exports = {
                   return;
                 }
                 
-                console.log('[DEBUG] destination:', destination);
+                //console.log('[DEBUG] destination:', destination);
 
                 io.to(destination).emit("msg-channel", {
                   code: 'NEW_CHAT_MSG',

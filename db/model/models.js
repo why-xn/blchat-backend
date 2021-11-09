@@ -143,7 +143,7 @@ const GroupChatActiveUserSocketSchema = new Schema({
     id: String,
     userId: String,
     socketId: String,
-    groupChatId: String,
+    chatId: String,
     status: String, // V (VALID), D (DELETED)
     createDate: Date
 });
