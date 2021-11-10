@@ -367,7 +367,7 @@ module.exports = {
               try {
                 console.log('[DEBUG] NEW_CHAT_MSG from', socket.id, socket.user.id);
 
-                if (!incomingData.chatId || !incomingData.msg) {
+                if (!incomingData.chatId || !incomingData.msg || incomingData.msg === '') {
                   return;
                 }
                 

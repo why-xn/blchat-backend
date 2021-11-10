@@ -36,7 +36,7 @@ router.get('/public/:chatId/participants', auth, async function(req, res, next) 
   if (searchText && searchText.length >= 3) {
     query["participant.displayName"] = { "$regex": searchText, "$options": "i" };
   }
-  const participantList = await GroupChatParticipant.find(query).sort({"participant.displayName": "asc"}).limit(100);;
+  const participantList = await GroupChatParticipant.find(query).sort({"participant.activeConnections": "desc"}).limit(100);;
   
   // filtering out my friends out of group chat participants list
   const privateChatList = await PrivateChat.find({status: 'V', "participants.id": req.user.id, type: "V2V", state: { $ne: "REJECTED" }}).sort({"lastMessage.date": "desc"});

@@ -14,7 +14,11 @@ router.get('/', auth, async function(req, res, next) {
     const requesterId = req.user.id;
     var privateChatType = req.query.type;
     var privateChatState = req.query.state;
-    var dbQuery = {"participants.id": requesterId, status: 'V'};
+    var dbQuery = {"participants.id": requesterId, status: 'V', 
+    $or: [
+      {"lastMessage.msg": { $exists: true }},
+      {"state": {$ne: "APPROVED"}},
+    ]};
     if (privateChatType != undefined && privateChatType != null && privateChatType.length > 0) {
       dbQuery.type = privateChatType;
     }
